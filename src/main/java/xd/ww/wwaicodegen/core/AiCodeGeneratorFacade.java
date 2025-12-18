@@ -1,0 +1,66 @@
+package xd.ww.wwaicodegen.core;
+
+import jakarta.annotation.Resource;
+import org.springframework.stereotype.Service;
+import xd.ww.wwaicodegen.ai.AiCodeGeneratorService;
+import xd.ww.wwaicodegen.ai.model.HtmlCodeResult;
+import xd.ww.wwaicodegen.ai.model.MultiFileCodeResult;
+import xd.ww.wwaicodegen.exception.BusinessException;
+import xd.ww.wwaicodegen.exception.ErrorCode;
+import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
+
+import java.io.File;
+
+/**
+ * AI代码生成门面类，组合AI代码生成和保存
+ */
+@Service
+public class AiCodeGeneratorFacade {
+
+    @Resource
+    AiCodeGeneratorService aiCodeGeneratorService;
+
+    /**
+     * 统一入口，根据不同的AI返回类型保存为文件
+     *
+     * @param userMessage     用户的提示词
+     * @param codeGenTypeEnum 生成的html类型的枚举
+     * @return 保存后的文件夹File类
+     */
+    public File generatorAndSaveCode(String userMessage, CodeGenTypeEnum codeGenTypeEnum) {
+        if (codeGenTypeEnum == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "生成类型不能为空");
+        }
+        return switch (codeGenTypeEnum) {
+            case HTML -> generateAndSaveHtmlCode(userMessage);
+            case MULTI_FILE -> generateAndSaveMultiFileCode(userMessage);
+            default -> {
+                String errorMessage = "不支持的Html类型" + codeGenTypeEnum;
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, errorMessage);
+            }
+        };
+    }
+
+    /**
+     * 生成 HTML 模式的代码并保存
+     *
+     * @param userMessage 用户提示词
+     * @return 保存的目录
+     */
+    private File generateAndSaveHtmlCode(String userMessage) {
+        HtmlCodeResult result = aiCodeGeneratorService.generateCode(userMessage);
+        return CodeFileSaver.saveHtmlCodeResult(result);
+    }
+
+    /**
+     * 生成多文件模式的代码并保存
+     *
+     * @param userMessage 用户提示词
+     * @return 保存的目录
+     */
+    private File generateAndSaveMultiFileCode(String userMessage) {
+        MultiFileCodeResult result = aiCodeGeneratorService.generateMultiCode(userMessage);
+        return CodeFileSaver.saveMultiHtmlCodeResult(result);
+    }
+
+}
