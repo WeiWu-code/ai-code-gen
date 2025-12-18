@@ -18,7 +18,7 @@ import java.io.File;
 public class AiCodeGeneratorFacade {
 
     @Resource
-    AiCodeGeneratorService aiCodeGeneratorService;
+    private AiCodeGeneratorService aiCodeGeneratorService;
 
     /**
      * 统一入口，根据不同的AI返回类型保存为文件

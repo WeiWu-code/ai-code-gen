@@ -53,6 +53,6 @@ public class CodeFileSaver {
      */
     private static void writeToFile(String dir, String fileName, String content) {
         String filePath = dir + File.separator + fileName;
-        FileUtil.writeString(filePath, content, CharsetUtil.CHARSET_UTF_8);
+        FileUtil.writeString(content, filePath, CharsetUtil.CHARSET_UTF_8);
     }
 }
