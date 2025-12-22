@@ -1,4 +1,4 @@
-package xd.ww.wwaicodegen.model.request;
+package xd.ww.wwaicodegen.model.request.user;
 
 import lombok.Data;
 import lombok.EqualsAndHashCode;

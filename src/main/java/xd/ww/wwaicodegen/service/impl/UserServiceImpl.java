@@ -10,11 +10,13 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.util.DigestUtils;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
+import xd.ww.wwaicodegen.exception.ThrowUtils;
 import xd.ww.wwaicodegen.model.emums.UserRoleEnum;
+import xd.ww.wwaicodegen.model.entity.App;
 import xd.ww.wwaicodegen.model.entity.User;
 import xd.ww.wwaicodegen.mapper.UserMapper;
 import org.springframework.stereotype.Service;
-import xd.ww.wwaicodegen.model.request.UserQueryRequest;
+import xd.ww.wwaicodegen.model.request.user.UserQueryRequest;
 import xd.ww.wwaicodegen.model.vo.LoginUserVO;
 import xd.ww.wwaicodegen.model.vo.UserVO;
 import xd.ww.wwaicodegen.service.UserService;
@@ -185,6 +187,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>  implements U
                 .like("userName", userName)
                 .like("userProfile", userProfile)
                 .orderBy(sortField, "ascend".equals(sortOrder));
+    }
+
+
+    /**
+     * 校验是否是用户本人
+     * @param requestId appUpdateRequest中的用户Id
+     * @param request HttpServletRequest
+     */
+    @Override
+    public void authUserAndGetId(Long requestId, HttpServletRequest request) {
+        User loginUser = getLoginUser(request);
+        // 仅本人可更新
+        if (!loginUser.getId().equals(requestId)) {
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR);
+        }
     }
 
 

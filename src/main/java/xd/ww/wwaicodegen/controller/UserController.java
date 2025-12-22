@@ -15,7 +15,7 @@ import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
 import xd.ww.wwaicodegen.exception.ThrowUtils;
 import xd.ww.wwaicodegen.model.entity.User;
-import xd.ww.wwaicodegen.model.request.*;
+import xd.ww.wwaicodegen.model.request.user.*;
 import xd.ww.wwaicodegen.model.vo.LoginUserVO;
 import xd.ww.wwaicodegen.model.vo.UserVO;
 import xd.ww.wwaicodegen.service.UserService;

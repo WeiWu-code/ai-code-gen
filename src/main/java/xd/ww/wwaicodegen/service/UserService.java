@@ -3,8 +3,12 @@ package xd.ww.wwaicodegen.service;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
 import jakarta.servlet.http.HttpServletRequest;
+import xd.ww.wwaicodegen.exception.BusinessException;
+import xd.ww.wwaicodegen.exception.ErrorCode;
+import xd.ww.wwaicodegen.exception.ThrowUtils;
+import xd.ww.wwaicodegen.model.entity.App;
 import xd.ww.wwaicodegen.model.entity.User;
-import xd.ww.wwaicodegen.model.request.UserQueryRequest;
+import xd.ww.wwaicodegen.model.request.user.UserQueryRequest;
 import xd.ww.wwaicodegen.model.vo.LoginUserVO;
 import xd.ww.wwaicodegen.model.vo.UserVO;
 
@@ -88,4 +92,12 @@ public interface UserService extends IService<User> {
      * @return QueryWrapper
      */
     QueryWrapper getQueryWrapper(UserQueryRequest userQueryRequest);
+
+    /**
+     * 校验是否是用户本人
+     * @param requestId appUpdateRequest中的用户Id
+     * @param request HttpServletRequest
+     * @return 用户Id
+     */
+    void authUserAndGetId(Long requestId, HttpServletRequest request);
 }
