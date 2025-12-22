@@ -37,3 +37,4 @@ build/
 /src/main/resources/application-local.yml
 /src/test/
 /tmp/
+/curl/cookies.txt

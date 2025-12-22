@@ -2,7 +2,6 @@ package xd.ww.wwaicodegen.saver;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.CharsetUtil;
-import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import org.apache.commons.lang3.StringUtils;
 import xd.ww.wwaicodegen.exception.BusinessException;
@@ -26,11 +25,11 @@ public abstract class CodeFileSaverTemplate<T> {
      * @param result 要保存的结构化代码对象
      * @return 保存的文件
      */
-    public final File saveCode(T result){
+    public final File saveCode(T result, Long appId){
         // 校验参数是否合法
         validateInput(result);
         // 构建唯一目录
-        String uniqueDir = buildUniqueDir();
+        String uniqueDir = buildUniqueDir(appId);
         // 保存文件
         saveFiles(result, uniqueDir);
         // 返回
@@ -56,12 +55,16 @@ public abstract class CodeFileSaverTemplate<T> {
 
     /**
      * 根据业务类型，构建文件夹名字
+     * @param appId appId
      * @return 文件夹名字
      */
-    // 构建文件夹名字： tmp/code_output/_业务类型_雪花ID
-    protected final String buildUniqueDir() {
+    // 构建文件夹名字： tmp/code_output/_业务类型_appId
+    protected final String buildUniqueDir(Long appId) {
+        if(appId == null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "appId is null");
+        }
         String codeType = getCodeType().getValue();
-        String uniqueDirName = StrUtil.format("{}_{}", codeType, IdUtil.getSnowflakeNextIdStr());
+        String uniqueDirName = StrUtil.format("{}_{}", codeType, appId);
         String dirPath = FILE_SAVE_ROOT_DIR + File.separator + uniqueDirName;
         FileUtil.mkdir(dirPath);
         return dirPath;

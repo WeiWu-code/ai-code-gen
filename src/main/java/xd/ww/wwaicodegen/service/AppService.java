@@ -2,7 +2,9 @@ package xd.ww.wwaicodegen.service;
 
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
+import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.model.entity.App;
+import xd.ww.wwaicodegen.model.entity.User;
 import xd.ww.wwaicodegen.model.request.app.AppQueryRequest;
 import xd.ww.wwaicodegen.model.vo.AppVO;
 
@@ -35,4 +37,14 @@ public interface AppService extends IService<App> {
      * @return QueryWrapper
      */
     QueryWrapper getQueryWrapper(AppQueryRequest appQueryRequest);
+
+
+    /**
+     * 应用聊天生成代码
+     * @param appId 应用Id
+     * @param message 用户提示词
+     * @param loginUser 登录用户
+     * @return 流式返回
+     */
+    Flux<String> chatToGenCode(Long appId, String message, User loginUser);
 }

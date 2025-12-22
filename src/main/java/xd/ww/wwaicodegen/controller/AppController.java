@@ -2,11 +2,16 @@ package xd.ww.wwaicodegen.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import xd.ww.wwaicodegen.annotation.AuthCheck;
 import xd.ww.wwaicodegen.common.BaseResponse;
 import xd.ww.wwaicodegen.common.DeleteRequest;
@@ -29,6 +34,7 @@ import xd.ww.wwaicodegen.service.UserService;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 
 /**
@@ -129,7 +135,7 @@ public class AppController {
     /**
      * 根据 id 获取应用详情
      *
-     * @param id      应用 id
+     * @param id 应用 id
      * @return 应用详情
      */
     @GetMapping("/get/vo")
@@ -187,9 +193,10 @@ public class AppController {
 
     /**
      * 根据appQueryRequest和pageNum，pageSize分页查询
+     *
      * @param appQueryRequest appQueryRequest
-     * @param pageNum 当前页
-     * @param pageSize 页大小
+     * @param pageNum         当前页
+     * @param pageSize        页大小
      * @return 封装后的AppVo的页
      */
     private Page<AppVO> getAppVOPage(AppQueryRequest appQueryRequest, long pageNum, long pageSize) {
@@ -281,5 +288,31 @@ public class AppController {
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR);
         // 获取封装类
         return ResultUtils.success(appService.getAppVO(app));
+    }
+
+    @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
+                                                       @RequestParam String message,
+                                                       HttpServletRequest request) {
+        // 参数校验
+        ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "appId不合法");
+        ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "message不能为空");
+        // 获取当前登录用户
+        User loginUser = userService.getLoginUser(request);
+        Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser);
+        return contentFlux
+                .map(chunk -> {
+                    Map<String, String> wrapper = Map.of("d", chunk);
+                    String jsonStr = JSONUtil.toJsonStr(wrapper);
+                    return ServerSentEvent.<String>builder()
+                            .data(jsonStr)
+                            .build();
+                }).concatWith(Mono.just(
+                        // 发送结束事件
+                        ServerSentEvent.<String>builder()
+                                .event("done")
+                                .data("")
+                                .build()
+                ));
     }
 }

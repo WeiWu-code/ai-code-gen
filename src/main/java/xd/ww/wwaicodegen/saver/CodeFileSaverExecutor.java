@@ -22,12 +22,16 @@ public class CodeFileSaverExecutor {
      * 执行代码保存
      * @param result 代码对象内容
      * @param codeGenTypeEnum 代码类型枚举
+     * @param appId 应用Id
      * @return 返回保存的文件
      */
-    public static File executorSaver(Object result, CodeGenTypeEnum codeGenTypeEnum){
+    public static File executorSaver(Object result, CodeGenTypeEnum codeGenTypeEnum, Long appId){
+        if(appId == null || codeGenTypeEnum == null){
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
         return switch (codeGenTypeEnum){
-            case MULTI_FILE -> multiFileCodeFileSaver.saveCode((MultiFileCodeResult) result);
-            case HTML -> htmlCodeFileSaver.saveCode((HtmlCodeResult) result);
+            case MULTI_FILE -> multiFileCodeFileSaver.saveCode((MultiFileCodeResult) result, appId);
+            case HTML -> htmlCodeFileSaver.saveCode((HtmlCodeResult) result, appId);
             default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "不支持的代码生成类型： " + codeGenTypeEnum);
         };
     }
