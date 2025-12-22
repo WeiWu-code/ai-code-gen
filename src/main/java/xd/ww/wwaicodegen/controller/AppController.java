@@ -169,17 +169,16 @@ public class AppController {
      * 分页获取优选应用列表
      *
      * @param appQueryRequest 查询请求
-     * @param request         请求
      * @return 应用列表
      */
     @PostMapping("/good/list/page/vo")
-    public BaseResponse<Page<AppVO>> listGoodAppVOByPage(@RequestBody AppQueryRequest appQueryRequest, HttpServletRequest request) {
+    public BaseResponse<Page<AppVO>> listGoodAppVOByPage(@RequestBody AppQueryRequest appQueryRequest) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR);
         // 限制每页最多 20 个
         long pageSize = appQueryRequest.getPageSize();
         ThrowUtils.throwIf(pageSize > 20, ErrorCode.PARAMS_ERROR, "每页最多查询 20 个应用");
         long pageNum = appQueryRequest.getCurrent();
-        // 只查询当前用户的应用
+        // 只查询精选
         appQueryRequest.setPriority(AppConstant.GOOD_APP_PRIORITY);
         // 执行查询
         Page<AppVO> appVOPage = getAppVOPage(appQueryRequest, pageNum, pageSize);
