@@ -1,0 +1,14 @@
+# 静态资源服务器 - 80 端口
+server {
+    listen       80;
+    server_name  localhost;
+    charset      utf-8;
+    charset_types text/css application/javascript text/plain text/xml application/json;
+    # 项目部署根目录
+    root         **/code_deploy;
+
+    # 处理所有请求
+    location ~ ^/([^/]+)/(.*)$ {
+        try_files /$1/$2 /$1/index.html =404;
+    }
+}

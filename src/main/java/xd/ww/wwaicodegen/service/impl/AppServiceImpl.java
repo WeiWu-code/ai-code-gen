@@ -1,12 +1,16 @@
 package xd.ww.wwaicodegen.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.io.FileUtil;
+import cn.hutool.core.io.IORuntimeException;
+import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
 import reactor.core.publisher.Flux;
+import xd.ww.wwaicodegen.constant.AppConstant;
 import xd.ww.wwaicodegen.core.AiCodeGeneratorFacade;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
@@ -22,6 +26,8 @@ import xd.ww.wwaicodegen.service.AppService;
 import org.springframework.stereotype.Service;
 import xd.ww.wwaicodegen.service.UserService;
 
+import java.io.File;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -133,6 +139,50 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         }
         // 5. 调用 AI 生成代码
         return aiCodeGeneratorFacade.generatorAndSaveCodeStream(message, codeGenTypeEnum, appId);
+    }
+
+    @Override
+    public String deployApp(Long appId, User loginUser) {
+        // 1. 参数校验
+        ThrowUtils.throwIf(appId == null || appId < 0, ErrorCode.PARAMS_ERROR, "应用Id错误");
+        ThrowUtils.throwIf(loginUser == null, ErrorCode.NO_AUTH_ERROR, "未登录");
+        // 2. 查询应用信息
+        App app = this.getById(appId);
+        ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
+        // 3. 权限校验，只有本人可以部署自己的应用
+        if(!app.getUserId().equals(loginUser.getId())){
+            throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限部署该应用");
+        }
+        // 4. 检查是否已经有deployKey，没有则生成
+        String deployKey = app.getDeployKey();
+        if(StrUtil.isBlank(deployKey)){
+            deployKey = RandomUtil.randomString(6);
+        }
+        // 5. 获取原始代码路径，类型
+        String codeType = app.getCodeGenType();
+        String dirName = codeType + "_" + appId;
+        String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + dirName;
+        // 6. 检查路径
+        File sourceDir = new File(sourceDirPath);
+        if(!sourceDir.exists() || !sourceDir.isDirectory()){
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "代码路径不存在");
+        }
+        // 7. 更新数据库
+        String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
+        try {
+            FileUtil.copyContent(sourceDir, new File(deployDirPath), true);
+        } catch (IORuntimeException e) {
+            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用部署失败");
+        }
+        // 8. 部署
+        App updateApp = new App();
+        updateApp.setId(appId);
+        updateApp.setDeployKey(deployKey);
+        updateApp.setDeployedTime(LocalDateTime.now());
+        boolean result = this.updateById(updateApp);
+        ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用部署更新失败");
+        // 9. 返回Url
+        return StrUtil.format("{}/{}", AppConstant.CODE_DEPLOY_HOST, deployKey);
     }
 
 }
