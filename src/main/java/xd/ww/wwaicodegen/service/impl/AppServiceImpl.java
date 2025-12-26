@@ -9,12 +9,14 @@ import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.constant.AppConstant;
 import xd.ww.wwaicodegen.core.AiCodeGeneratorFacade;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
 import xd.ww.wwaicodegen.exception.ThrowUtils;
+import xd.ww.wwaicodegen.model.emums.ChatHistoryMessageTypeEnum;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 import xd.ww.wwaicodegen.model.entity.App;
 import xd.ww.wwaicodegen.mapper.AppMapper;
@@ -24,8 +26,8 @@ import xd.ww.wwaicodegen.model.vo.AppVO;
 import xd.ww.wwaicodegen.model.vo.UserVO;
 import xd.ww.wwaicodegen.service.AppService;
 import org.springframework.stereotype.Service;
+import xd.ww.wwaicodegen.service.ChatHistoryService;
 import xd.ww.wwaicodegen.service.UserService;
-
 import java.io.File;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -47,6 +49,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
 
     @Resource
     AiCodeGeneratorFacade aiCodeGeneratorFacade;
+
+    @Autowired
+    @Resource
+    private ChatHistoryService chatHistoryService;
 
     public AppServiceImpl(UserService userService) {
         this.userService = userService;
@@ -137,8 +143,31 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         if (codeGenTypeEnum == null) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "不支持的代码生成类型");
         }
-        // 5. 调用 AI 生成代码
-        return aiCodeGeneratorFacade.generatorAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        // 5. 添加消息进对话历史
+        boolean saveResult = chatHistoryService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
+        ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "addChatMessage失败");
+        // 6. 调用 AI 生成代码，流式
+        Flux<String> codeFlux = aiCodeGeneratorFacade.generatorAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        // 上一步包含了保存。
+        // 7. 收集AI流式响应，并在完成后记录到对话历史
+        StringBuilder aiResponseBuilder = new StringBuilder();
+        return codeFlux.map(chunk -> {
+            // 收集AI响应内容
+            aiResponseBuilder.append(chunk);
+            return chunk;
+        }).doOnComplete(()->{
+            // 响应完成后，添加AI消息到对话历史
+            String aiResponse = aiResponseBuilder.toString();
+            if(StrUtil.isNotBlank(aiResponse)){
+                boolean res = chatHistoryService.addChatMessage(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
+                ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "addChatMessage失败");
+            }
+        }).doOnError(error->{
+            // 记录错误信息
+            String errorMessage = "AI 回复失败: " + error.getMessage();
+            boolean res = chatHistoryService.addChatMessage(appId, errorMessage, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
+            ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "addChatMessage失败");
+        });
     }
 
     @Override

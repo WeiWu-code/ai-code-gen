@@ -11,7 +11,7 @@ import java.util.Map;
 public class MybatisGenerator {
 
     // 要生成的表
-    private static final String[] TABLES_NAME = {"app"};
+    private static final String[] TABLES_NAME = {"chat_history"};
 
     public static void main(String[] args) {
         Dict dict = YamlUtil.loadByPath("application.yml");
