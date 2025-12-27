@@ -8,8 +8,8 @@ import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.constant.AppConstant;
 import xd.ww.wwaicodegen.core.AiCodeGeneratorFacade;
@@ -29,6 +29,7 @@ import org.springframework.stereotype.Service;
 import xd.ww.wwaicodegen.service.ChatHistoryService;
 import xd.ww.wwaicodegen.service.UserService;
 import java.io.File;
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -41,6 +42,7 @@ import java.util.stream.Collectors;
  *
  * @author xd 吴玮
  */
+@Slf4j
 @Service
 public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppService{
 
@@ -50,7 +52,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
     @Resource
     AiCodeGeneratorFacade aiCodeGeneratorFacade;
 
-    @Autowired
     @Resource
     private ChatHistoryService chatHistoryService;
 
@@ -214,4 +215,32 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         return StrUtil.format("{}/{}", AppConstant.CODE_DEPLOY_HOST, deployKey);
     }
 
+    /**
+     * 删除应用时，关联删除对话历史，保证应用删除，先不添加事务
+     * @param id 待删除的Appid
+     * @return 删除成功 true 删除失败 false
+     */
+//    @Transactional(rollbackFor = Exception.class)
+    @Override
+    public boolean removeById(Serializable id) {
+        if(id == null){
+            return false;
+        }
+        // 转化为Long
+        Long appId = Long.valueOf(id.toString());
+        if(appId <= 0){
+            return false;
+        }
+        // 先删除关联的对话历史
+        try {
+            boolean res = chatHistoryService.deleteByAppId(appId);
+            ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "删除对话历史失败");
+        } catch (Exception e) {
+            // 记录
+            log.info("删除对话历史失败：{}", e.getMessage());
+        }
+
+        // 删除应用
+        return this.removeById(appId);
+    }
 }
