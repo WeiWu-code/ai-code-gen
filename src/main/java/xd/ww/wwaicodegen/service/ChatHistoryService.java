@@ -3,6 +3,7 @@ package xd.ww.wwaicodegen.service;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.core.service.IService;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import xd.ww.wwaicodegen.model.entity.ChatHistory;
 import xd.ww.wwaicodegen.model.entity.User;
 import xd.ww.wwaicodegen.model.request.chathistory.ChatHistoryQueryRequest;
@@ -52,4 +53,13 @@ public interface ChatHistoryService extends IService<ChatHistory> {
     Page<ChatHistory> listAppChatHistoryByPage(Long appId, int pageSize,
                                                LocalDateTime lastCreateTime,
                                                User loginUser);
+
+    /**
+     * 从持久化数据库存储中加载对话历史到内存（Redis缓存）
+     * @param appId 应用Id
+     * @param messageWindowChatMemory 待加载的内存对话记忆
+     * @param maxCount 最多加载多少条
+     * @return 加载的数量
+     */
+    int loadChatHistoryToMemory(Long appId, MessageWindowChatMemory messageWindowChatMemory, int maxCount);
 }

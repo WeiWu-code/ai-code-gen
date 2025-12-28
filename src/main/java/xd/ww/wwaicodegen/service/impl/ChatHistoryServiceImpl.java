@@ -1,10 +1,16 @@
 package xd.ww.wwaicodegen.service.impl;
 
+import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import xd.ww.wwaicodegen.constant.UserConstant;
 import xd.ww.wwaicodegen.exception.ErrorCode;
 import xd.ww.wwaicodegen.exception.ThrowUtils;
@@ -19,16 +25,19 @@ import xd.ww.wwaicodegen.service.ChatHistoryService;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 对话历史 服务层实现。
  *
  * @author xd 吴玮
  */
+@Slf4j
 @Service
 public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatHistory>  implements ChatHistoryService{
 
     @Resource
+    @Lazy
     AppService appService;
 
     @Override
@@ -128,5 +137,44 @@ public class ChatHistoryServiceImpl extends ServiceImpl<ChatHistoryMapper, ChatH
         return this.page(Page.of(1, pageSize), queryWrapper);
     }
 
+    @Override
+    public int loadChatHistoryToMemory(Long appId, MessageWindowChatMemory messageWindowChatMemory, int maxCount) {
+        try {
+            ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "AppID不合法");
+            ThrowUtils.throwIf(messageWindowChatMemory == null, ErrorCode.SYSTEM_ERROR, "messageWindowChatMemory 为 null");
 
+            QueryWrapper queryWrapper = QueryWrapper.create()
+                    .eq(ChatHistory::getAppId, appId)
+                    .orderBy(ChatHistory::getCreateTime, false)
+                    .limit(1, maxCount);
+            // limit 1 是为了排除最新的用户消息
+
+            List<ChatHistory> chatHistory = this.list(queryWrapper);
+            if(CollUtil.isEmpty(chatHistory)) {
+                return 0;
+            }
+            // 反转列表，因为越早的消息在越上面
+            chatHistory = chatHistory.reversed();
+            // 按照时间顺序，将消息添加到记忆中
+            int loadCount = 0;
+            // 先清理，防止重复加载
+            messageWindowChatMemory.clear();
+            for (ChatHistory history : chatHistory) {
+                // 如果是用户级别的消息
+                if(ChatHistoryMessageTypeEnum.USER.getValue().equals(history.getMessageType())) {
+                    messageWindowChatMemory.add(UserMessage.from(history.getMessage()));
+                }// 如果是AI的消息
+                else if(ChatHistoryMessageTypeEnum.AI.getValue().equals(history.getMessageType())) {
+                    messageWindowChatMemory.add(AiMessage.from(history.getMessage()));
+                }
+                loadCount ++;
+            }
+            log.info("应用 appId = {} 成功加载了 {} 条历史消息", appId, loadCount);
+            return loadCount;
+        } catch (Exception e) {
+            log.error("应用 appId = {} 加载历史消息失败， {}", appId, e.getMessage(), e);
+            // 加载失败没有上下文
+            return 0;
+        }
+    }
 }

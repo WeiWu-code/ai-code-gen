@@ -1,6 +1,7 @@
 package xd.ww.wwaicodegen.ai;
 
 import dev.langchain4j.service.SystemMessage;
+import dev.langchain4j.service.UserMessage;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.ai.model.HtmlCodeResult;
 import xd.ww.wwaicodegen.ai.model.MultiFileCodeResult;
@@ -13,7 +14,7 @@ public interface AiCodeGeneratorService {
      * @return AI返回的结果
      */
     @SystemMessage(fromResource = "prompt/code-gen-html-system-prompt.txt")
-    HtmlCodeResult generateCode(String userMessage);
+    HtmlCodeResult generateCode(@UserMessage String userMessage);
 
     /**
      * 生成多文件html代码
@@ -21,7 +22,7 @@ public interface AiCodeGeneratorService {
      * @return AI返回的结果
      */
     @SystemMessage(fromResource = "prompt/code-gen-multi-html-system-prompt.txt")
-    MultiFileCodeResult generateMultiCode(String userMessage);
+    MultiFileCodeResult generateMultiCode(@UserMessage String userMessage);
 
     /**
      * 生成单文件html代码
@@ -30,7 +31,7 @@ public interface AiCodeGeneratorService {
      * @return AI返回的结果
      */
     @SystemMessage(fromResource = "prompt/code-gen-html-system-prompt.txt")
-    Flux<String> generateCodeStream(String userMessage);
+    Flux<String> generateCodeStream(@UserMessage String userMessage);
 
     /**
      * 生成多文件html代码
@@ -39,5 +40,5 @@ public interface AiCodeGeneratorService {
      * @return AI返回的结果
      */
     @SystemMessage(fromResource = "prompt/code-gen-multi-html-system-prompt.txt")
-    Flux<String> generateMultiCodeStream(String userMessage);
+    Flux<String> generateMultiCodeStream(@UserMessage String userMessage);
 }

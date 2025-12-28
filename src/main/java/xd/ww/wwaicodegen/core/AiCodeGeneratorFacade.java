@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.ai.AiCodeGeneratorService;
+import xd.ww.wwaicodegen.ai.AiCodeGeneratorServiceFactory;
 import xd.ww.wwaicodegen.ai.model.HtmlCodeResult;
 import xd.ww.wwaicodegen.ai.model.MultiFileCodeResult;
 import xd.ww.wwaicodegen.exception.BusinessException;
@@ -23,7 +24,7 @@ import java.io.File;
 public class AiCodeGeneratorFacade {
 
     @Resource
-    private AiCodeGeneratorService aiCodeGeneratorService;
+    private AiCodeGeneratorServiceFactory aiCodeGeneratorServiceFactory;
 
     /**
      * 统一入口，根据不同的AI返回类型保存为文件
@@ -40,6 +41,9 @@ public class AiCodeGeneratorFacade {
         if (appId == null){
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "appId不能为空");
         }
+
+        // 根据appId获取相应的Ai服务实例
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 HtmlCodeResult htmlCodeResult = aiCodeGeneratorService.generateCode(userMessage);
@@ -72,6 +76,9 @@ public class AiCodeGeneratorFacade {
         if (appId == null){
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "appId不能为空");
         }
+
+        // 根据appId获取相应的Ai服务实例
+        AiCodeGeneratorService aiCodeGeneratorService = aiCodeGeneratorServiceFactory.getAiCodeGeneratorService(appId);
         return switch (codeGenTypeEnum) {
             case HTML -> {
                 Flux<String> htmlCodeStream = aiCodeGeneratorService.generateCodeStream(userMessage);
