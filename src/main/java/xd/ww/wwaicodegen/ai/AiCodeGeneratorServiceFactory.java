@@ -3,6 +3,7 @@ package xd.ww.wwaicodegen.ai;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import dev.langchain4j.community.store.memory.chat.redis.RedisChatMemoryStore;
+import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.memory.chat.MessageWindowChatMemory;
 import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.StreamingChatModel;
@@ -10,6 +11,10 @@ import dev.langchain4j.service.AiServices;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
+import xd.ww.wwaicodegen.ai.tool.FileWriteTool;
+import xd.ww.wwaicodegen.exception.BusinessException;
+import xd.ww.wwaicodegen.exception.ErrorCode;
+import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 import xd.ww.wwaicodegen.service.ChatHistoryService;
 
 import java.time.Duration;
@@ -23,7 +28,7 @@ import java.time.Duration;
 public class AiCodeGeneratorServiceFactory {
 
     @Resource
-    private StreamingChatModel streamingChatModel;
+    private StreamingChatModel openAiStreamingChatModel;
 
     @Resource
     private ChatModel chatModel;
@@ -34,6 +39,9 @@ public class AiCodeGeneratorServiceFactory {
     @Resource
     ChatHistoryService chatHistoryService;
 
+    @Resource
+    StreamingChatModel reasoningStreamingChatModel;
+
     /**
      * Ai服务实例缓存
      * 缓存策略：
@@ -41,7 +49,7 @@ public class AiCodeGeneratorServiceFactory {
      * - 写入后 30 分钟过期
      * - 响应后 10 分钟过期
      */
-    private final Cache<Long, AiCodeGeneratorService> aiServiceCache = Caffeine.newBuilder()
+    private final Cache<String, AiCodeGeneratorService> aiServiceCache = Caffeine.newBuilder()
             .maximumSize(1000)
             .expireAfterWrite(Duration.ofMinutes(30))
             .expireAfterAccess(Duration.ofMinutes(10))
@@ -54,14 +62,30 @@ public class AiCodeGeneratorServiceFactory {
      * @param appId 应用Id
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(long appId) {
-        return aiServiceCache.get(appId, this::createAiCodeGeneratorService);
+        // 为了兼容之前的逻辑，HTML和MULTY可公用CodeGenTypeEnum.HTML
+        return this.getAiCodeGeneratorService(appId, CodeGenTypeEnum.HTML);
+    }
+
+    /**
+     * 根据AppId创建一个AiCodeGeneratorService
+     * 如果缓存中有，则不创建
+     * @param appId 应用Id
+     */
+    public AiCodeGeneratorService getAiCodeGeneratorService(long appId, CodeGenTypeEnum codeType) {
+        String cacheKey = builderKey(appId, codeType);
+        return aiServiceCache.get(cacheKey, key -> this.createAiCodeGeneratorService(appId, codeType));
+    }
+
+    private String builderKey(long appId, CodeGenTypeEnum codeType) {
+        return appId + "_" + codeType.name();
     }
 
     /**
      * 根据AppId创建一个AiCodeGeneratorService
      * @param appId 应用Id
+     * @param codeType 代码类型
      */
-    private AiCodeGeneratorService createAiCodeGeneratorService(long appId) {
+    private AiCodeGeneratorService createAiCodeGeneratorService(long appId, CodeGenTypeEnum codeType) {
         log.info("为 appId = {} 创建一个新的Ai服务实例", appId);
         MessageWindowChatMemory memory = MessageWindowChatMemory.builder()
                 .chatMemoryStore(redisChatMemoryStore)
@@ -73,11 +97,25 @@ public class AiCodeGeneratorServiceFactory {
         int size = chatHistoryService.loadChatHistoryToMemory(appId, memory, 20);
         log.debug("加载 {} 条历史记录", size);
 
-        return AiServices.builder(AiCodeGeneratorService.class)
-                .chatModel(chatModel)
-                .streamingChatModel(streamingChatModel)
-                .chatMemory(memory)
-                .build();
-    }
+        // 根据代码类型，使用不同的Ai
+        return switch (codeType) {
+            case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)
+                    .streamingChatModel(reasoningStreamingChatModel)
+                    .chatMemory(memory)
+                    .chatMemoryProvider(memoryId -> memory)
+                    .tools(new FileWriteTool())
+                    // 处理工具幻觉问题
+                    .hallucinatedToolNameStrategy(toolExecutionRequest ->
+                            ToolExecutionResultMessage.from(toolExecutionRequest,
+                                    "Error: there is no tool called " + toolExecutionRequest.name()))
+                    .build();
 
+            case HTML, MULTI_FILE -> AiServices.builder(AiCodeGeneratorService.class)
+                        .chatModel(chatModel)
+                        .streamingChatModel(openAiStreamingChatModel)
+                        .chatMemory(memory)
+                        .build();
+            default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "不支持的生成类型");
+        };
+    }
 }

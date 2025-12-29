@@ -1,5 +1,6 @@
 package xd.ww.wwaicodegen.ai;
 
+import dev.langchain4j.service.MemoryId;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 import reactor.core.publisher.Flux;
@@ -41,4 +42,15 @@ public interface AiCodeGeneratorService {
      */
     @SystemMessage(fromResource = "prompt/code-gen-multi-html-system-prompt.txt")
     Flux<String> generateMultiCodeStream(@UserMessage String userMessage);
+
+
+    /**
+     * 生成 Vue 项目代码（流式）
+     *
+     * @param userMessage 用户消息
+     * @return 生成过程的流式响应
+     */
+    @SystemMessage(fromResource = "prompt/code-gen-vue-project-system-prompt.txt")
+    Flux<String> generateVueProjectCodeStream(@MemoryId long appId, @UserMessage String userMessage);
+
 }
