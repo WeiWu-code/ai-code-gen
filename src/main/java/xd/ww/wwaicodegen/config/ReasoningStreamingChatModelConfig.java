@@ -7,6 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.time.Duration;
+
 @Configuration
 @Data
 @ConfigurationProperties("langchain4j.open-ai.chat-model")
@@ -29,6 +31,7 @@ public class ReasoningStreamingChatModelConfig {
                 .maxTokens(maxTokens)
                 .logRequests(true)
                 .logResponses(true)
+                .timeout(Duration.ofSeconds(300))
                 .build();
     }
 }

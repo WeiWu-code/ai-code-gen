@@ -13,6 +13,8 @@ import org.springframework.beans.BeanUtils;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.constant.AppConstant;
 import xd.ww.wwaicodegen.core.AiCodeGeneratorFacade;
+import xd.ww.wwaicodegen.core.builder.VueProjectBuilder;
+import xd.ww.wwaicodegen.core.handler.StreamHandlerExecutor;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
 import xd.ww.wwaicodegen.exception.ThrowUtils;
@@ -28,6 +30,7 @@ import xd.ww.wwaicodegen.service.AppService;
 import org.springframework.stereotype.Service;
 import xd.ww.wwaicodegen.service.ChatHistoryService;
 import xd.ww.wwaicodegen.service.UserService;
+
 import java.io.File;
 import java.io.Serializable;
 import java.time.LocalDateTime;
@@ -44,16 +47,22 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppService{
+public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppService {
 
     @Resource
-    UserService userService;
+    private UserService userService;
 
     @Resource
-    AiCodeGeneratorFacade aiCodeGeneratorFacade;
+    private AiCodeGeneratorFacade aiCodeGeneratorFacade;
+
+    @Resource
+    private StreamHandlerExecutor streamHandlerExecutor;
 
     @Resource
     private ChatHistoryService chatHistoryService;
+
+    @Resource
+    private VueProjectBuilder vueProjectBuilder;
 
     public AppServiceImpl(UserService userService) {
         this.userService = userService;
@@ -61,14 +70,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
 
     @Override
     public AppVO getAppVO(App app) {
-        if(app == null){
+        if (app == null) {
             return null;
         }
         AppVO appVO = new AppVO();
-        BeanUtils.copyProperties(app,appVO);
+        BeanUtils.copyProperties(app, appVO);
         // 查询用户
         Long userId = app.getUserId();
-        if(userId != null){
+        if (userId != null) {
             User user = userService.getById(userId);
             UserVO userVO = userService.getUserVO(user);
             appVO.setUser(userVO);
@@ -96,7 +105,6 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
             return appVO;
         }).collect(Collectors.toList());
     }
-
 
 
     @Override
@@ -149,26 +157,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "addChatMessage失败");
         // 6. 调用 AI 生成代码，流式
         Flux<String> codeFlux = aiCodeGeneratorFacade.generatorAndSaveCodeStream(message, codeGenTypeEnum, appId);
-        // 上一步包含了保存。
+        // 上一步包含了工具调用的保存。
         // 7. 收集AI流式响应，并在完成后记录到对话历史
-        StringBuilder aiResponseBuilder = new StringBuilder();
-        return codeFlux.map(chunk -> {
-            // 收集AI响应内容
-            aiResponseBuilder.append(chunk);
-            return chunk;
-        }).doOnComplete(()->{
-            // 响应完成后，添加AI消息到对话历史
-            String aiResponse = aiResponseBuilder.toString();
-            if(StrUtil.isNotBlank(aiResponse)){
-                boolean res = chatHistoryService.addChatMessage(appId, aiResponse, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
-                ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "addChatMessage失败");
-            }
-        }).doOnError(error->{
-            // 记录错误信息
-            String errorMessage = "AI 回复失败: " + error.getMessage();
-            boolean res = chatHistoryService.addChatMessage(appId, errorMessage, ChatHistoryMessageTypeEnum.AI.getValue(), loginUser.getId());
-            ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "addChatMessage失败");
-        });
+        return streamHandlerExecutor.doExecutor(codeFlux, chatHistoryService, appId, loginUser, codeGenTypeEnum);
     }
 
     @Override
@@ -180,12 +171,12 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         App app = this.getById(appId);
         ThrowUtils.throwIf(app == null, ErrorCode.NOT_FOUND_ERROR, "应用不存在");
         // 3. 权限校验，只有本人可以部署自己的应用
-        if(!app.getUserId().equals(loginUser.getId())){
+        if (!app.getUserId().equals(loginUser.getId())) {
             throw new BusinessException(ErrorCode.NO_AUTH_ERROR, "无权限部署该应用");
         }
         // 4. 检查是否已经有deployKey，没有则生成
         String deployKey = app.getDeployKey();
-        if(StrUtil.isBlank(deployKey)){
+        if (StrUtil.isBlank(deployKey)) {
             deployKey = RandomUtil.randomString(6);
         }
         // 5. 获取原始代码路径，类型
@@ -194,17 +185,31 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         String sourceDirPath = AppConstant.CODE_OUTPUT_ROOT_DIR + File.separator + dirName;
         // 6. 检查路径
         File sourceDir = new File(sourceDirPath);
-        if(!sourceDir.exists() || !sourceDir.isDirectory()){
+        if (!sourceDir.exists() || !sourceDir.isDirectory()) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "代码路径不存在");
         }
-        // 7. 更新数据库
+        // 7. Vue 项目特殊处理：执行构建
+        CodeGenTypeEnum codeGenTypeEnum = CodeGenTypeEnum.getEnumByValue(codeType);
+        if (codeGenTypeEnum == CodeGenTypeEnum.VUE_PROJECT) {
+            // Vue 项目需要构建
+            StringBuilder outLog = new StringBuilder();
+            boolean buildSuccess = vueProjectBuilder.buildProject(sourceDirPath, outLog);
+            ThrowUtils.throwIf(!buildSuccess, ErrorCode.SYSTEM_ERROR, "Vue 项目构建失败，请检查代码和依赖。日志：" + outLog);
+            // 检查 dist 目录是否存在
+            File distDir = new File(sourceDirPath, "dist");
+            ThrowUtils.throwIf(!distDir.exists(), ErrorCode.SYSTEM_ERROR, "Vue 项目构建完成但未生成 dist 目录");
+            // 将 dist 目录作为部署源
+            sourceDir = distDir;
+            log.info("Vue 项目构建成功，将部署 dist 目录: {}", distDir.getAbsolutePath());
+        }
+        // 8. 复制文件到部署目录
         String deployDirPath = AppConstant.CODE_DEPLOY_ROOT_DIR + File.separator + deployKey;
         try {
             FileUtil.copyContent(sourceDir, new File(deployDirPath), true);
         } catch (IORuntimeException e) {
             throw new BusinessException(ErrorCode.SYSTEM_ERROR, "应用部署失败");
         }
-        // 8. 部署
+        // 8. 部署， 更新数据库
         App updateApp = new App();
         updateApp.setId(appId);
         updateApp.setDeployKey(deployKey);
@@ -217,18 +222,19 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
 
     /**
      * 删除应用时，关联删除对话历史，保证应用删除，先不添加事务
+     *
      * @param id 待删除的Appid
      * @return 删除成功 true 删除失败 false
      */
 //    @Transactional(rollbackFor = Exception.class)
     @Override
     public boolean removeById(Serializable id) {
-        if(id == null){
+        if (id == null) {
             return false;
         }
         // 转化为Long
         Long appId = Long.valueOf(id.toString());
-        if(appId <= 0){
+        if (appId <= 0) {
             return false;
         }
         // 先删除关联的对话历史
@@ -243,4 +249,5 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App>  implements AppS
         // 删除应用
         return this.removeById(appId);
     }
+
 }

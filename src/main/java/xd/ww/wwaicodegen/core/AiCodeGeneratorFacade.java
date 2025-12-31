@@ -1,13 +1,14 @@
 package xd.ww.wwaicodegen.core;
 
+import cn.hutool.json.JSONUtil;
+import dev.langchain4j.service.TokenStream;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.ai.AiCodeGeneratorService;
 import xd.ww.wwaicodegen.ai.AiCodeGeneratorServiceFactory;
-import xd.ww.wwaicodegen.ai.model.HtmlCodeResult;
-import xd.ww.wwaicodegen.ai.model.MultiFileCodeResult;
+import xd.ww.wwaicodegen.ai.model.*;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
@@ -89,8 +90,8 @@ public class AiCodeGeneratorFacade {
                 yield processCodeStream(multiCodeStream, CodeGenTypeEnum.MULTI_FILE, appId);
             }
             case VUE_PROJECT -> {
-                Flux<String> vueCodeStream = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
-                yield processCodeStream(vueCodeStream, CodeGenTypeEnum.MULTI_FILE, appId);
+                TokenStream vueCodeStream = aiCodeGeneratorService.generateVueProjectCodeStream(appId, userMessage);
+                yield processTokenStream(vueCodeStream);
             }
             default -> {
                 String errorMessage = "不支持的Html类型" + codeGenTypeEnum;
@@ -116,6 +117,41 @@ public class AiCodeGeneratorFacade {
             } catch (Exception e) {
                 log.info("保存失败{}", e.getMessage());
             }
+        });
+    }
+
+    /**
+     * 将 TokenStream 转化为 Flux<String> 适配器
+     * @param tokenStream AI 返回的结果 TokenStream
+     * @return Flux<String>流
+     */
+    private Flux<String> processTokenStream(TokenStream tokenStream) {
+        return Flux.create(sink -> {
+            tokenStream.onPartialResponse((partialResponse) -> {
+                        // AI调用工具前的消息
+                        AiResponseMessage aiResponseMessage = new AiResponseMessage(partialResponse);
+                        // 将aiResponse转化为Json字符串
+                        sink.next(JSONUtil.toJsonStr(aiResponseMessage));
+                    })
+                    .onPartialToolExecutionRequest((index, toolExecutionRequest)->{
+                        // 工具请求消息
+                        ToolRequestMessage toolRequestMessage = new ToolRequestMessage(toolExecutionRequest);
+                        // 转化为Json字符串
+                        sink.next(JSONUtil.toJsonStr(toolRequestMessage));
+                    })
+                    .onToolExecuted((toolExecution) -> {
+                        // 工具完成消息
+                        ToolExecutedMessage toolExecutedMessage = new ToolExecutedMessage(toolExecution);
+                        sink.next(JSONUtil.toJsonStr(toolExecutedMessage));
+                    })
+                    .onCompleteResponse((chatResponse -> {
+                        sink.complete();
+                    }))
+                    .onError((error)->{
+                        log.error(error.getMessage());
+                        sink.error(error);
+                    })
+                    .start();
         });
     }
 }
