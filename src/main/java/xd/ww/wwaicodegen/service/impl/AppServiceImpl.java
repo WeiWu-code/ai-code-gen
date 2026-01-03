@@ -29,6 +29,7 @@ import xd.ww.wwaicodegen.model.vo.UserVO;
 import xd.ww.wwaicodegen.service.AppService;
 import org.springframework.stereotype.Service;
 import xd.ww.wwaicodegen.service.ChatHistoryService;
+import xd.ww.wwaicodegen.service.ScreenShotService;
 import xd.ww.wwaicodegen.service.UserService;
 
 import java.io.File;
@@ -63,6 +64,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
 
     @Resource
     private VueProjectBuilder vueProjectBuilder;
+
+    @Resource
+    private ScreenShotService screenShotService;
 
     public AppServiceImpl(UserService userService) {
         this.userService = userService;
@@ -217,7 +221,10 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         boolean result = this.updateById(updateApp);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "应用部署更新失败");
         // 9. 返回Url
-        return StrUtil.format("{}/{}", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        String deployUrl = StrUtil.format("{}/{}", AppConstant.CODE_DEPLOY_HOST, deployKey);
+        // 10. 异步生成封面
+        generateScreenshotAsync(appId, deployUrl);
+        return deployUrl;
     }
 
     /**
@@ -249,5 +256,26 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 删除应用
         return this.removeById(appId);
     }
+
+
+    /**
+     * 异步生成截图并上传到COS
+     * @param appId 应用Id
+     * @param webUrl 网页网址
+     */
+    private void generateScreenshotAsync(Long appId, String webUrl){
+        // 使用虚拟线程执行
+        Thread.startVirtualThread(() -> {
+           // 调用截图服务，并上传
+           String screenshotUrl = screenShotService.generateAndUploadScreenShot(webUrl);
+           // 更新应用字段
+            App updateApp = new App();
+            updateApp.setId(appId);
+            updateApp.setCover(screenshotUrl);
+            boolean result = this.updateById(updateApp);
+            ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "更新应用封面失败");
+        });
+    }
+
 
 }
