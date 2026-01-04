@@ -90,7 +90,7 @@ public class AiCodeGeneratorServiceFactory {
         MessageWindowChatMemory memory = MessageWindowChatMemory.builder()
                 .chatMemoryStore(redisChatMemoryStore)
                 .id(appId)
-                .maxMessages(20)
+                .maxMessages(100)
                 .build();
 
         // 先加载历史消息
@@ -108,6 +108,7 @@ public class AiCodeGeneratorServiceFactory {
                     .hallucinatedToolNameStrategy(toolExecutionRequest ->
                             ToolExecutionResultMessage.from(toolExecutionRequest,
                                     "Error: there is no tool called " + toolExecutionRequest.name()))
+                    .maxSequentialToolsInvocations(20)
                     .build();
 
             case HTML, MULTI_FILE -> AiServices.builder(AiCodeGeneratorService.class)

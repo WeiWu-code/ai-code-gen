@@ -102,7 +102,8 @@ public class JsonMessageStreamHandler {
             case TOOL_EXECUTED -> {
                 ToolExecutedMessage toolExecutedMessage = JSONUtil.toBean(chunk, ToolExecutedMessage.class);
                 JSONObject jsonObject = JSONUtil.parseObj(toolExecutedMessage.getArguments());
-                String relativeFilePath = jsonObject.getStr("relativeFilePath");
+                String relativeFilePath = jsonObject.getStr("relativePath");
+                log.info("文件拓展名：{}", relativeFilePath);
                 // 获取拓展名
                 String suffix = FileUtil.getSuffix(relativeFilePath);
                 // 获取内容

@@ -5,6 +5,7 @@ import com.mybatisflex.core.service.IService;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.model.entity.App;
 import xd.ww.wwaicodegen.model.entity.User;
+import xd.ww.wwaicodegen.model.request.app.AppAddRequest;
 import xd.ww.wwaicodegen.model.request.app.AppQueryRequest;
 import xd.ww.wwaicodegen.model.vo.AppVO;
 
@@ -56,4 +57,12 @@ public interface AppService extends IService<App> {
      * @return 部署后的网址
      */
     String deployApp(Long appId, User loginUser);
+
+    /**
+     * 创建应用，利用AI只能选择
+     * @param appAddRequest 创建应用的请求
+     * @param loginUser 当前登录用户
+     * @return 创建成功的应用Id
+     */
+    Long createApp(AppAddRequest appAddRequest, User loginUser);
 }
