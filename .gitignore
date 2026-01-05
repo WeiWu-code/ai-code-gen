@@ -34,3 +34,7 @@ build/
 .vscode/
 /.mvn/
 /.mvn/wrapper/
+/src/main/resources/application-local.yml
+/src/test/
+/tmp/
+/config/cookies.txt
