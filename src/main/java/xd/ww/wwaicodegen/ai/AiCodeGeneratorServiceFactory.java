@@ -11,7 +11,7 @@ import dev.langchain4j.service.AiServices;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
-import xd.ww.wwaicodegen.ai.tool.FileWriteTool;
+import xd.ww.wwaicodegen.ai.tool.*;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
@@ -41,6 +41,9 @@ public class AiCodeGeneratorServiceFactory {
 
     @Resource
     StreamingChatModel reasoningStreamingChatModel;
+
+    @Resource
+    ToolManager toolManager;
 
     /**
      * Ai服务实例缓存
@@ -103,7 +106,7 @@ public class AiCodeGeneratorServiceFactory {
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemory(memory)
                     .chatMemoryProvider(memoryId -> memory)
-                    .tools(new FileWriteTool())
+                    .tools(toolManager.getAllTools())
                     // 处理工具幻觉问题
                     .hallucinatedToolNameStrategy(toolExecutionRequest ->
                             ToolExecutionResultMessage.from(toolExecutionRequest,

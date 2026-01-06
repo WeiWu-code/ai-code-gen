@@ -26,8 +26,8 @@ server:
     context-path: /api
     session:
       cookie:
-        max-age: 1800
-        # 30分钟过期
+        max-age: 86400
+        # 24小时过期
 
 # springdoc-openapi配置
 springdoc:

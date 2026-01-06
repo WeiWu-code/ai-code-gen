@@ -260,7 +260,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
 
         // 删除应用
-        return this.removeById(appId);
+        return super.removeById(appId);
     }
 
 
