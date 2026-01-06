@@ -15,6 +15,7 @@ import xd.ww.wwaicodegen.ai.tool.*;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
+import xd.ww.wwaicodegen.service.ChatHistoryOriginalService;
 import xd.ww.wwaicodegen.service.ChatHistoryService;
 
 import java.time.Duration;
@@ -34,16 +35,19 @@ public class AiCodeGeneratorServiceFactory {
     private ChatModel chatModel;
 
     @Resource
-    RedisChatMemoryStore redisChatMemoryStore;
+    private RedisChatMemoryStore redisChatMemoryStore;
 
     @Resource
-    ChatHistoryService chatHistoryService;
+    private ChatHistoryService chatHistoryService;
 
     @Resource
-    StreamingChatModel reasoningStreamingChatModel;
+    private StreamingChatModel reasoningStreamingChatModel;
 
     @Resource
-    ToolManager toolManager;
+    private ToolManager toolManager;
+
+    @Resource
+    private ChatHistoryOriginalService chatHistoryOriginalService;
 
     /**
      * Ai服务实例缓存
@@ -96,13 +100,13 @@ public class AiCodeGeneratorServiceFactory {
                 .maxMessages(100)
                 .build();
 
-        // 先加载历史消息
-        int size = chatHistoryService.loadChatHistoryToMemory(appId, memory, 20);
-        log.debug("加载 {} 条历史记录", size);
-
         // 根据代码类型，使用不同的Ai
+        // 根据代码类型，加载不同的ChatHistory服务
         return switch (codeType) {
-            case VUE_PROJECT -> AiServices.builder(AiCodeGeneratorService.class)
+            case VUE_PROJECT -> {
+                // 先加载历史消息
+                int size = chatHistoryOriginalService.loadOriginalChatHistoryToMemory(appId, memory, 50);
+                yield AiServices.builder(AiCodeGeneratorService.class)
                     .streamingChatModel(reasoningStreamingChatModel)
                     .chatMemory(memory)
                     .chatMemoryProvider(memoryId -> memory)
@@ -113,12 +117,18 @@ public class AiCodeGeneratorServiceFactory {
                                     "Error: there is no tool called " + toolExecutionRequest.name()))
                     .maxSequentialToolsInvocations(20)
                     .build();
+            }
 
-            case HTML, MULTI_FILE -> AiServices.builder(AiCodeGeneratorService.class)
+            case HTML, MULTI_FILE -> {
+                // 先加载历史消息
+                int size = chatHistoryService.loadChatHistoryToMemory(appId, memory, 20);
+                log.debug("加载 {} 条历史记录", size);
+                yield  AiServices.builder(AiCodeGeneratorService.class)
                         .chatModel(chatModel)
                         .streamingChatModel(openAiStreamingChatModel)
                         .chatMemory(memory)
                         .build();
+            }
             default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "不支持的生成类型");
         };
     }
