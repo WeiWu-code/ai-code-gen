@@ -5,7 +5,6 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.ai.model.*;
@@ -40,7 +39,8 @@ public class JsonMessageStreamHandler {
 
     @Resource
     private ToolManager toolManager;
-    @Autowired
+
+    @Resource
     private ChatHistoryOriginalService chatHistoryOriginalService;
 
     /**

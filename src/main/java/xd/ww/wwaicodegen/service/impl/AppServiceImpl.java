@@ -165,8 +165,11 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 5. 添加消息进对话历史
         boolean saveResult = chatHistoryService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
         ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "添加消息进对话历史失败");
-        saveResult = chatHistoryOriginalService.addOriginalChatMessage(appId, message,ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
-        ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "添加消息进原始对话历史失败");
+        // vue要添加工具调用信息
+        if(codeGenTypeEnum.equals(CodeGenTypeEnum.VUE_PROJECT)){
+            saveResult = chatHistoryOriginalService.addOriginalChatMessage(appId, message,ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
+            ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "添加消息进原始对话历史失败");
+        }
         // 6. 调用 AI 生成代码，流式
         Flux<String> codeFlux = aiCodeGeneratorFacade.generatorAndSaveCodeStream(message, codeGenTypeEnum, appId);
         // 上一步包含了工具调用的保存。
