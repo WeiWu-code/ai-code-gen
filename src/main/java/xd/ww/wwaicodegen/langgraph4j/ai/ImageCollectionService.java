@@ -3,6 +3,7 @@ package xd.ww.wwaicodegen.langgraph4j.ai;
 import dev.langchain4j.service.SystemMessage;
 import dev.langchain4j.service.UserMessage;
 
+@Deprecated
 public interface ImageCollectionService {
 
     /**

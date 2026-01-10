@@ -37,7 +37,7 @@ public class LogoGeneratorTool {
         String url = "https://image.pollinations.ai/prompt/" + URLEncoder.encode(logoPrompt, StandardCharsets.UTF_8)
                 + "?width=384&height=384&model=flux&seed=42";
 
-        try (HttpResponse response = HttpRequest.get(url).timeout(10000).execute()) {
+        try (HttpResponse response = HttpRequest.get(url).timeout(30000).execute()) {
             if(!response.isOk()) {
                 return logoList;
             }

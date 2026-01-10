@@ -80,8 +80,10 @@ public class FileDirReadTool extends BaseTool {
                 }
                 StringBuilder structure = new StringBuilder();
                 structure.append("项目目录结构:\n");
+
                 // 使用 Hutool 递归获取所有文件
-                List<File> allFiles = FileUtil.loopFiles(targetDir, file -> !shouldIgnore(file.getName()));
+                List<File> allFiles = FileUtil.loopFiles(targetDir, file -> !shouldIgnore(targetDir.toPath(), file));
+
                 // 按路径深度和名称排序显示
                 allFiles.stream()
                         .sorted((f1, f2) -> {
@@ -94,8 +96,12 @@ public class FileDirReadTool extends BaseTool {
                         })
                         .forEach(file -> {
                             int depth = getRelativeDepth(targetDir, file);
-                            String indent = "  ".repeat(depth);
-                            structure.append(indent).append(file.getName());
+                            // 添加上一级文件夹
+                            if(depth > 0){
+                                String parentDirName = targetDir.toPath().relativize(file.getParentFile().toPath()).toString();
+                                structure.append(parentDirName).append(File.separator);
+                            }
+                            structure.append(file.getName()).append("\n");
                         });
                 return structure.toString();
             }else{
@@ -121,13 +127,17 @@ public class FileDirReadTool extends BaseTool {
     /**
      * 判断是否应该忽略该文件或目录
      */
-    private boolean shouldIgnore(String fileName) {
-        // 检查是否在忽略名称列表中
-        if (IGNORED_NAMES.contains(fileName)) {
-            return true;
+    private boolean shouldIgnore(Path path, File file) {
+        // 计算file相对于targetDir的路径
+        Path relativePath = path.relativize(file.toPath());
+        for(Path name : relativePath){
+            String nameStr = name.toString();
+            // 1. 统一忽略某些名字（无论文件还是目录）
+            if (IGNORED_NAMES.contains(nameStr)) {
+                return true;
+            }
         }
-
-        // 检查文件扩展名
-        return IGNORED_EXTENSIONS.stream().anyMatch(fileName::endsWith);
+        // 2. 如果是文件，再额外忽略某些后缀
+        return IGNORED_EXTENSIONS.stream().anyMatch(file.getName()::endsWith);
     }
 }

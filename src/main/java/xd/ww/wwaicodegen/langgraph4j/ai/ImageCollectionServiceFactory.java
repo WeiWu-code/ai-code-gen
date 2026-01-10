@@ -12,6 +12,7 @@ import xd.ww.wwaicodegen.langgraph4j.tools.MermaidDiagramTool;
 import xd.ww.wwaicodegen.langgraph4j.tools.UndrawIllustrationTool;
 
 @Slf4j
+@Deprecated
 @Configuration
 public class ImageCollectionServiceFactory {
 

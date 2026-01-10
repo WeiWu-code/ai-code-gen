@@ -6,6 +6,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import xd.ww.wwaicodegen.langgraph4j.model.ImageResource;
+import xd.ww.wwaicodegen.langgraph4j.model.QualityResult;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 import java.util.Map;
 import java.io.Serial;
@@ -70,6 +71,12 @@ public class WorkflowContext implements Serializable {
      * 错误信息
      */
     private String errorMessage;
+
+    /**
+     * 质量检查结果
+     */
+    private QualityResult qualityResult;
+
 
     @Serial
     private static final long serialVersionUID = 1L;

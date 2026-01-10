@@ -24,27 +24,23 @@ public class ProjectBuilderNode {
             String buildCodeDir;
             CodeGenTypeEnum codeType = context.getGenerationType();
             String generatorCodeDir = context.getGeneratedCodeDir();
-            if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
-                StringBuilder outLog = new StringBuilder();
-                try{
-                    VueProjectBuilder vueProjectBuilder = SpringContextUtil.getBean(VueProjectBuilder.class);
-                    // 执行构建
-                    boolean buildSuccess = vueProjectBuilder.buildProject(generatorCodeDir, outLog);
-                    if(buildSuccess){
-                        buildCodeDir = generatorCodeDir + File.separator + "dist";
-                        log.info("构建成功, 构建目录{}", buildCodeDir);
-                    }else{
-                        throw new BusinessException(ErrorCode.OPERATION_ERROR, "项目构建失败");
-                    }
-                }catch(Exception e){
-                    log.error("项目构建异常：{}", outLog);
-                    // 异常时返回原路径
-                    buildCodeDir = generatorCodeDir;
+            StringBuilder outLog = new StringBuilder();
+            try {
+                VueProjectBuilder vueProjectBuilder = SpringContextUtil.getBean(VueProjectBuilder.class);
+                // 执行构建
+                boolean buildSuccess = vueProjectBuilder.buildProject(generatorCodeDir, outLog);
+                if (buildSuccess) {
+                    buildCodeDir = generatorCodeDir + File.separator + "dist";
+                    log.info("构建成功, 构建目录{}", buildCodeDir);
+                } else {
+                    throw new BusinessException(ErrorCode.OPERATION_ERROR, "项目构建失败");
                 }
-            }else{
-                // html 和 multi_html
+            } catch (Exception e) {
+                log.error("项目构建异常：{}", outLog);
+                // 异常时返回原路径
                 buildCodeDir = generatorCodeDir;
             }
+
             // 更新状态
             context.setCurrentStep("项目构建");
             context.setBuildResultDir(buildCodeDir);

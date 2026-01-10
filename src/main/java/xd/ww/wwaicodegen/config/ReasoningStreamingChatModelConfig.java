@@ -18,6 +18,8 @@ public class ReasoningStreamingChatModelConfig {
     private String apiKey;
     private Integer maxTokens;
     private String modelName;
+    private Boolean logRequests;
+    private Boolean logResponses;
 
     /**
      * 推理流式模型 用于 vue 项目生成
@@ -29,8 +31,8 @@ public class ReasoningStreamingChatModelConfig {
                 .apiKey(apiKey)
                 .modelName(modelName)
                 .maxTokens(maxTokens)
-                .logRequests(true)
-                .logResponses(true)
+                .logRequests(logRequests)
+                .logResponses(logResponses)
                 .timeout(Duration.ofSeconds(300))
                 .build();
     }
