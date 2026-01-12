@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import xd.ww.wwaicodegen.ai.AiCodeGenTypeRoutingService;
+import xd.ww.wwaicodegen.ai.AiCodeGenTypeRoutingServiceFactory;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
 import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
@@ -23,9 +24,10 @@ public class RouterNode {
             CodeGenTypeEnum generationType;
             try{
                 // 获取bean
-                AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService = SpringContextUtil.getBean(AiCodeGenTypeRoutingService.class);
+                AiCodeGenTypeRoutingServiceFactory aiCodeGenTypeRoutingServiceFactory = SpringContextUtil.getBean(AiCodeGenTypeRoutingServiceFactory.class);
+                AiCodeGenTypeRoutingService routingService = aiCodeGenTypeRoutingServiceFactory.createAiCodeGenTypeRoutingService();
                 // 根据原始提示词去判断路由
-                generationType = aiCodeGenTypeRoutingService.routeCodeGenType(originalPrompt);
+                generationType = routingService.routeCodeGenType(originalPrompt);
                 sendEndSseEvent(3, "智能路由选择");
             }catch (Exception e){
                 log.error("AI路由失败，默认使用VUE");

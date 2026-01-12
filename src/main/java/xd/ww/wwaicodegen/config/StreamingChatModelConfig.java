@@ -11,28 +11,33 @@ import org.springframework.context.annotation.Scope;
 import java.time.Duration;
 
 @Configuration
+@ConfigurationProperties(prefix = "langchain4j.open-ai.streaming-chat-model")
 @Data
-@ConfigurationProperties("langchain4j.open-ai.reasoning-chat-model")
-public class ReasoningStreamingChatModelConfig {
+public class StreamingChatModelConfig {
 
     private String baseUrl;
+
     private String apiKey;
-    private Integer maxTokens;
+
     private String modelName;
-    private Boolean logRequests;
-    private Boolean logResponses;
-    private Duration timeout;
+
+    private Integer maxTokens;
+
     private Double temperature;
 
-    /**
-     * 推理流式模型 用于 vue 项目生成
-     */
+    private boolean logRequests;
+
+    private boolean logResponses;
+
+    private Duration timeout;
+
     @Bean
+    // 多例模式
     @Scope("prototype")
-    public StreamingChatModel reasoningStreamingChatModelPrototype(){
+    public StreamingChatModel streamingChatModelPrototype() {
         return OpenAiStreamingChatModel.builder()
-                .baseUrl(baseUrl)
                 .apiKey(apiKey)
+                .baseUrl(baseUrl)
                 .modelName(modelName)
                 .maxTokens(maxTokens)
                 .temperature(temperature)

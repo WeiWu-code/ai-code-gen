@@ -1,0 +1,33 @@
+langchain4j:
+  open-ai:
+    streaming-chat-model: &config
+      api-key: xx
+      base-url: xx
+      log-responses: false
+      log-requests: false
+      model-name: xx
+      max-tokens: xx
+      timeout: 300s
+      temperature: 0.5
+    reasoning-chat-model:
+      <<: *config
+      temperature: 0.2
+    routing-chat-model:
+      <<: *config
+      model-name: GLM-4-AirX
+    chat-model:
+      <<: *config
+#      strict-json-schema: true
+#      response-format: json_object
+
+# 添加 COS 对象存储配置（需要从腾讯云获取）
+cos:
+  client:
+    host: xx
+    secretId: xx
+    secretKey: xx
+    region: xx
+    bucket: xx
+
+pexels:
+  api-key: xx

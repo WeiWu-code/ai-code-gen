@@ -42,7 +42,14 @@ public class FileReadTool extends BaseTool {
                 if (!Files.exists(path) || !Files.isRegularFile(path)) {
                     return "错误：文件不存在或不是文件 - " + relativeFilePath;
                 }
-                return Files.readString(path);
+
+                String content = Files.readString(path);
+                // 修复：如果内容为空或只包含空白字符，返回特定提示
+                if (content.trim().isEmpty()) {
+                    return "（该文件为空，没有内容）";
+                }
+                return content;
+
             }else{
                 return "错误：路径不合法，应该使用相对路径，不允许绝对路径 - " + relativeFilePath;
             }

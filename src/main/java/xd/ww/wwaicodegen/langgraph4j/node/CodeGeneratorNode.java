@@ -24,7 +24,7 @@ public class CodeGeneratorNode {
             WorkflowContext context = WorkflowContext.getContext(state);
 
             // 检查是否有错误信息
-            buildUserMessage(context);
+            context.setEnhancedPrompt(buildUserMessage(context));
             SseContextHolder.sendProcessing("代码生成");
             log.info("执行节点: 代码生成");
             // 使用增强后的提示词

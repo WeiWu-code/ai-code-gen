@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 import xd.ww.wwaicodegen.ai.tool.*;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
+import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 import xd.ww.wwaicodegen.service.ChatHistoryOriginalService;
 import xd.ww.wwaicodegen.service.ChatHistoryService;
@@ -28,10 +29,8 @@ import java.time.Duration;
 @Slf4j
 public class AiCodeGeneratorServiceFactory {
 
-    @Resource
-    private StreamingChatModel openAiStreamingChatModel;
 
-    @Resource
+    @Resource(name = "openAiChatModel")
     private ChatModel chatModel;
 
     @Resource
@@ -40,8 +39,6 @@ public class AiCodeGeneratorServiceFactory {
     @Resource
     private ChatHistoryService chatHistoryService;
 
-    @Resource
-    private StreamingChatModel reasoningStreamingChatModel;
 
     @Resource
     private ToolManager toolManager;
@@ -104,6 +101,8 @@ public class AiCodeGeneratorServiceFactory {
         // 根据代码类型，加载不同的ChatHistory服务
         return switch (codeType) {
             case VUE_PROJECT -> {
+                // 使用多例模式的StreamingChatModel
+                StreamingChatModel reasoningStreamingChatModel = SpringContextUtil.getBean("reasoningStreamingChatModelPrototype", StreamingChatModel.class);
                 // 先加载历史消息
                 int size = chatHistoryOriginalService.loadOriginalChatHistoryToMemory(appId, memory, 50);
                 yield AiServices.builder(AiCodeGeneratorService.class)
@@ -120,12 +119,14 @@ public class AiCodeGeneratorServiceFactory {
             }
 
             case HTML, MULTI_FILE -> {
+                // 使用多例模式的StreamingChatModel
+                StreamingChatModel streamingChatModel = SpringContextUtil.getBean("streamingChatModelPrototype", StreamingChatModel.class);
                 // 先加载历史消息
                 int size = chatHistoryService.loadChatHistoryToMemory(appId, memory, 20);
                 log.debug("加载 {} 条历史记录", size);
                 yield  AiServices.builder(AiCodeGeneratorService.class)
                         .chatModel(chatModel)
-                        .streamingChatModel(openAiStreamingChatModel)
+                        .streamingChatModel(streamingChatModel)
                         .chatMemory(memory)
                         .build();
             }
