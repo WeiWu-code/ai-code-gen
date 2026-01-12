@@ -115,7 +115,7 @@ public class AiCodeGeneratorServiceFactory {
                     .hallucinatedToolNameStrategy(toolExecutionRequest ->
                             ToolExecutionResultMessage.from(toolExecutionRequest,
                                     "Error: there is no tool called " + toolExecutionRequest.name()))
-                    .maxSequentialToolsInvocations(20)
+                    .maxSequentialToolsInvocations(15)
                     .build();
             }
 

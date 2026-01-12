@@ -9,17 +9,23 @@ import xd.ww.wwaicodegen.core.AiCodeGeneratorFacade;
 import xd.ww.wwaicodegen.langgraph4j.model.QualityResult;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
+import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 
 import java.time.Duration;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
+import static xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder.sendEndSseEvent;
 
 @Slf4j
 public class CodeGeneratorNode {
     public static AsyncNodeAction<MessagesState<String>> create() {
         return node_async(state -> {
             WorkflowContext context = WorkflowContext.getContext(state);
+
+            // 检查是否有错误信息
+            buildUserMessage(context);
+            SseContextHolder.sendProcessing("代码生成");
             log.info("执行节点: 代码生成");
             // 使用增强后的提示词
             String userMessage = context.getEnhancedPrompt();
@@ -28,18 +34,15 @@ public class CodeGeneratorNode {
             AiCodeGeneratorFacade aiCodeGeneratorFacade = SpringContextUtil.getBean(AiCodeGeneratorFacade.class);
             log.info("开始生成代码，类型: {}", codeType.getText());
             // 先使用固定的AppId
-            Long appId = 1L;
+            Long appId = 3L;
             Flux<String> codeStream = aiCodeGeneratorFacade.generatorAndSaveCodeStream(userMessage, codeType, appId);
             // 等待流输出完成
             codeStream.blockLast(Duration.ofMinutes(10));
             // 设置输出目录
             String generatedCodeDir = String.format("%s/%s_%s", AppConstant.CODE_OUTPUT_ROOT_DIR,
                     codeType.getValue(), appId);
-            // 检查代码
-            // 构造用户消息（包含原始提示词和可能的错误修复信息）
-            userMessage = buildUserMessage(context);
-            log.info("AI智能检查代码结果： {}", userMessage);
 
+            sendEndSseEvent(4, "代码生成");
             // 更新状态
             context.setCurrentStep("代码生成");
             context.setGeneratedCodeDir(generatedCodeDir);

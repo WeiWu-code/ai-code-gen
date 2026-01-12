@@ -2,7 +2,6 @@ package xd.ww.wwaicodegen.langgraph4j.node;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.StrUtil;
-import dev.langchain4j.data.message.UserMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
@@ -10,12 +9,14 @@ import xd.ww.wwaicodegen.langgraph4j.ai.CodeQualityCheckService;
 import xd.ww.wwaicodegen.langgraph4j.model.QualityResult;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
+import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
 
 import java.io.File;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
+import static xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder.sendEndSseEvent;
 
 /**
  * 代码质量检查节点
@@ -27,6 +28,7 @@ public class CodeQualityCheckNode {
         return node_async(state -> {
             WorkflowContext context = WorkflowContext.getContext(state);
             log.info("执行节点: 代码质量检查");
+            SseContextHolder.sendProcessing("代码质量检查");
             String generatedCodeDir = context.getGeneratedCodeDir();
             QualityResult qualityResult;
             try {
@@ -45,6 +47,7 @@ public class CodeQualityCheckNode {
                     qualityResult = qualityCheckService.checkCodeQuality(codeContent);
                     log.info("代码质量检查完成 - 是否通过: {}", qualityResult.getIsValid());
                 }
+                sendEndSseEvent(5, "代码质量检查完成, " + (qualityResult.getIsValid() ? "通过" : "失败"));
             } catch (Exception e) {
                 log.error("代码质量检查异常: {}", e.getMessage(), e);
                 qualityResult = QualityResult.builder()

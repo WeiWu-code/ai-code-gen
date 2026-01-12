@@ -143,7 +143,7 @@
     </div>
 
     <div class="button-group">
-        <button class="btn-primary" onclick="startWorkflowFlux()">🔄 开始 Flux 工作流</button>
+        <button class="btn-primary" onclick="startWorkflowSse()">🔄 开始 SSE 工作流</button>
         <button class="btn-secondary" onclick="clearEvents()">🗑️ 清空日志</button>
     </div>
 
@@ -193,7 +193,7 @@
         events.scrollTop = events.scrollHeight;
     }
 
-    function startWorkflowFlux() {
+    function startWorkflowSse() {
         const prompt = document.getElementById('promptInput').value.trim();
         if (!prompt) {
             alert('请输入提示词');
@@ -207,34 +207,26 @@
         updateStatus('工作流执行中...', 'connecting');
         addEvent('系统消息', '开始执行工作流: ' + prompt, new Date().toLocaleTimeString());
 
-        const url = `http://localhost:9010/api/workflow/execute-flux?prompt=${encodeURIComponent(prompt)}`;
+        const url = `http://localhost:9010/api/workflow/execute-sse?prompt=${encodeURIComponent(prompt)}`;
         eventSource = new EventSource(url);
 
         eventSource.onopen = function() {
             updateStatus('工作流连接已建立', 'connected');
-            addEvent('连接事件', '工作流 Flux 连接成功建立', new Date().toLocaleTimeString());
-            console.log('EventSource 连接已建立');
-        };
-
-        // 通用消息监听器，捕获所有事件
-        eventSource.onmessage = function(event) {
-            console.log('收到通用消息:', event);
-            try {
-                const data = JSON.parse(event.data);
-                addEvent('📨 通用消息', data, new Date().toLocaleTimeString());
-            } catch (e) {
-                addEvent('📨 通用消息', event.data, new Date().toLocaleTimeString());
-            }
+            addEvent('连接事件', '工作流 SSE 连接成功建立', new Date().toLocaleTimeString());
         };
 
         eventSource.addEventListener('workflow_start', function(event) {
-            console.log('收到 workflow_start 事件:', event.data);
             const data = JSON.parse(event.data);
             addEvent('🚀 工作流开始', data, new Date().toLocaleTimeString());
         });
 
+        eventSource.addEventListener('step_processing', function(event) {
+            const data = JSON.parse(event.data);
+            // 1. 在日志栏追加记录
+            addEvent(`⏳ 正在执行: ${data.stepName}...`, data, new Date().toLocaleTimeString());
+        });
+
         eventSource.addEventListener('step_completed', function(event) {
-            console.log('收到 step_completed 事件:', event.data);
             const data = JSON.parse(event.data);
             addEvent(`✅ 步骤 ${data.stepNumber} 完成: ${data.currentStep}`, data, new Date().toLocaleTimeString());
         });
@@ -257,8 +249,9 @@
             }, 1000);
         });
 
+
+
         eventSource.onerror = function(event) {
-            console.error('EventSource 错误:', event);
             updateStatus('连接错误', 'disconnected');
             addEvent('错误事件', '工作流连接发生错误', new Date().toLocaleTimeString());
             eventSource.close();
