@@ -8,6 +8,8 @@ import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
@@ -55,6 +57,9 @@ public class AppController {
 
     @Resource
     private ProjectDownloadService projectDownloadService;
+
+    @Resource
+    private CacheManager cacheManager;
 
     /**
      * 创建应用
@@ -233,11 +238,6 @@ public class AppController {
      */
     @PostMapping("/admin/update")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
-    @CacheEvict(
-            value = "good_app_page",
-            allEntries = true,
-            condition = "#appAdminUpdateRequest.priority != null" // 核心逻辑：只有当 修改精选 时才清空
-    )
     public BaseResponse<Boolean> updateAppByAdmin(@RequestBody AppAdminUpdateRequest appAdminUpdateRequest) {
         if (appAdminUpdateRequest == null || appAdminUpdateRequest.getId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -250,6 +250,11 @@ public class AppController {
         BeanUtil.copyProperties(appAdminUpdateRequest, app);
         // 设置编辑时间
         app.setEditTime(LocalDateTime.now());
+        // 更新前清除redis缓存
+        Cache goodAppPageCache = cacheManager.getCache("good_app_page");
+        if (goodAppPageCache != null) {
+            goodAppPageCache.clear();
+        }
         boolean result = appService.updateById(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         return ResultUtils.success(true);
