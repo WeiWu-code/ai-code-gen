@@ -8,6 +8,8 @@ import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
@@ -165,6 +167,11 @@ public class AppController {
      * @param appQueryRequest 查询请求
      * @return 应用列表
      */
+    @Cacheable(
+            value = "good_app_page",
+            key = "T(xd.ww.wwaicodegen.util.CacheKeyUtils).generateKey(#appQueryRequest)",
+            condition = "#appQueryRequest.current <= 10"
+    )
     @PostMapping("/good/list/page/vo")
     public BaseResponse<Page<AppVO>> listGoodAppVOByPage(@RequestBody AppQueryRequest appQueryRequest) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR);
@@ -226,6 +233,11 @@ public class AppController {
      */
     @PostMapping("/admin/update")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    @CacheEvict(
+            value = "good_app_page",
+            allEntries = true,
+            condition = "#appAdminUpdateRequest.priority != null" // 核心逻辑：只有当 修改精选 时才清空
+    )
     public BaseResponse<Boolean> updateAppByAdmin(@RequestBody AppAdminUpdateRequest appAdminUpdateRequest) {
         if (appAdminUpdateRequest == null || appAdminUpdateRequest.getId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);

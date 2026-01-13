@@ -14,7 +14,7 @@ langchain4j:
       temperature: 0.2
     routing-chat-model:
       <<: *config
-      model-name: GLM-4-AirX
+      model-name: GLM-4-Flash
     chat-model:
       <<: *config
 #      strict-json-schema: true
