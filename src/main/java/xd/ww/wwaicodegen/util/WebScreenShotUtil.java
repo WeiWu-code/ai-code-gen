@@ -84,7 +84,8 @@ public class WebScreenShotUtil {
     private static WebDriver initChromeDriver(int width, int height) {
         try {
             // 自动管理 ChromeDriver
-            WebDriverManager.chromedriver().setup();
+            System.setProperty("wdm.chromeDriverMirrorUrl", "https://registry.npmmirror.com/binary.html?path=chromedriver");
+            WebDriverManager.chromedriver().useMirror().setup();
             // 配置 Chrome 选项
             WebDriver driver = getWebDriver(width, height);
             // 设置页面加载超时
@@ -117,6 +118,7 @@ public class WebScreenShotUtil {
         // 创建驱动
         return new ChromeDriver(options);
     }
+
 
     /**
      * 保存图片到文件

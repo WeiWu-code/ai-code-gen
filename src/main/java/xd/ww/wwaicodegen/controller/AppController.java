@@ -8,6 +8,9 @@ import com.mybatisflex.core.query.QueryWrapper;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
@@ -26,6 +29,8 @@ import xd.ww.wwaicodegen.model.entity.App;
 import xd.ww.wwaicodegen.model.entity.User;
 import xd.ww.wwaicodegen.model.request.app.*;
 import xd.ww.wwaicodegen.model.vo.AppVO;
+import xd.ww.wwaicodegen.ratelimit.annotation.RateLimit;
+import xd.ww.wwaicodegen.ratelimit.model.RateLimitType;
 import xd.ww.wwaicodegen.service.AppService;
 import xd.ww.wwaicodegen.service.ProjectDownloadService;
 import xd.ww.wwaicodegen.service.UserService;
@@ -53,6 +58,9 @@ public class AppController {
 
     @Resource
     private ProjectDownloadService projectDownloadService;
+
+    @Resource
+    private CacheManager cacheManager;
 
     /**
      * 创建应用
@@ -165,6 +173,11 @@ public class AppController {
      * @param appQueryRequest 查询请求
      * @return 应用列表
      */
+    @Cacheable(
+            value = "good_app_page",
+            key = "T(xd.ww.wwaicodegen.util.CacheKeyUtils).generateKey(#appQueryRequest)",
+            condition = "#appQueryRequest.current <= 10"
+    )
     @PostMapping("/good/list/page/vo")
     public BaseResponse<Page<AppVO>> listGoodAppVOByPage(@RequestBody AppQueryRequest appQueryRequest) {
         ThrowUtils.throwIf(appQueryRequest == null, ErrorCode.PARAMS_ERROR);
@@ -238,6 +251,11 @@ public class AppController {
         BeanUtil.copyProperties(appAdminUpdateRequest, app);
         // 设置编辑时间
         app.setEditTime(LocalDateTime.now());
+        // 更新前清除redis缓存
+        Cache goodAppPageCache = cacheManager.getCache("good_app_page");
+        if (goodAppPageCache != null) {
+            goodAppPageCache.clear();
+        }
         boolean result = appService.updateById(app);
         ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR);
         return ResultUtils.success(true);
@@ -279,6 +297,7 @@ public class AppController {
     }
 
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60,message = "AI对话请求过于频繁，请稍后再试")
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
                                                        @RequestParam String message,
                                                        HttpServletRequest request) {

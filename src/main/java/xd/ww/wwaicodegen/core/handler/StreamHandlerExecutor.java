@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 import xd.ww.wwaicodegen.model.entity.User;
+import xd.ww.wwaicodegen.service.ChatHistoryOriginalService;
 import xd.ww.wwaicodegen.service.ChatHistoryService;
 
 /**
@@ -24,21 +25,23 @@ public class StreamHandlerExecutor {
 
     /**
      * 处理器执行类，处理Flux流，并保存对话历史
-     * @param originFlux Flux<String>流，原始的或者TokenStream转化的
-     * @param chatHistoryService 对话历史服务，由调用者传输
-     * @param appId 应用 Id
-     * @param user 登录用户
-     * @param codeType 代码类型
+     *
+     * @param originFlux                 Flux<String>流，原始的或者TokenStream转化的
+     * @param chatHistoryService         对话历史服务，由调用者传输
+     * @param chatHistoryOriginalService 原始对话历史，记录了工具调用等额外信息
+     * @param appId                      应用 Id
+     * @param user                       登录用户
+     * @param codeType                   代码类型
      * @return 返回处理后的Flux<String>
      */
     public Flux<String> doExecutor(Flux<String> originFlux,
                                    ChatHistoryService chatHistoryService,
-                                   long appId, User user, CodeGenTypeEnum codeType) {
+                                   ChatHistoryOriginalService chatHistoryOriginalService, long appId, User user, CodeGenTypeEnum codeType) {
         return switch (codeType){
             case HTML, MULTI_FILE -> // 不需要注入
                     new SimpleTextStreamHandler().handle(originFlux, chatHistoryService, appId, user);
             case VUE_PROJECT -> // 使用注入器
-                    jsonMessageStreamHandler.handle(originFlux, chatHistoryService, appId, user);
+                    jsonMessageStreamHandler.handle(originFlux, chatHistoryService, chatHistoryOriginalService, appId, user);
         };
     }
 }

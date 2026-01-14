@@ -13,6 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.ai.AiCodeGenTypeRoutingService;
+import xd.ww.wwaicodegen.ai.AiCodeGenTypeRoutingServiceFactory;
 import xd.ww.wwaicodegen.constant.AppConstant;
 import xd.ww.wwaicodegen.core.AiCodeGeneratorFacade;
 import xd.ww.wwaicodegen.core.builder.VueProjectBuilder;
@@ -29,11 +30,8 @@ import xd.ww.wwaicodegen.model.request.app.AppAddRequest;
 import xd.ww.wwaicodegen.model.request.app.AppQueryRequest;
 import xd.ww.wwaicodegen.model.vo.AppVO;
 import xd.ww.wwaicodegen.model.vo.UserVO;
-import xd.ww.wwaicodegen.service.AppService;
+import xd.ww.wwaicodegen.service.*;
 import org.springframework.stereotype.Service;
-import xd.ww.wwaicodegen.service.ChatHistoryService;
-import xd.ww.wwaicodegen.service.ScreenShotService;
-import xd.ww.wwaicodegen.service.UserService;
 
 import java.io.File;
 import java.io.Serializable;
@@ -60,6 +58,9 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private AiCodeGeneratorFacade aiCodeGeneratorFacade;
 
     @Resource
+    private AiCodeGenTypeRoutingServiceFactory aiCodeGenTypeRoutingServiceFactory;
+
+    @Resource
     private StreamHandlerExecutor streamHandlerExecutor;
 
     @Resource
@@ -72,7 +73,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     private ScreenShotService screenShotService;
 
     @Resource
-    private AiCodeGenTypeRoutingService aiCodeGenTypeRoutingService;
+    private ChatHistoryOriginalService chatHistoryOriginalService;
 
     public AppServiceImpl(UserService userService) {
         this.userService = userService;
@@ -164,12 +165,17 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         }
         // 5. 添加消息进对话历史
         boolean saveResult = chatHistoryService.addChatMessage(appId, message, ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
-        ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "addChatMessage失败");
+        ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "添加消息进对话历史失败");
+        // vue要添加工具调用信息
+        if(codeGenTypeEnum.equals(CodeGenTypeEnum.VUE_PROJECT)){
+            saveResult = chatHistoryOriginalService.addOriginalChatMessage(appId, message,ChatHistoryMessageTypeEnum.USER.getValue(), loginUser.getId());
+            ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "添加消息进原始对话历史失败");
+        }
         // 6. 调用 AI 生成代码，流式
         Flux<String> codeFlux = aiCodeGeneratorFacade.generatorAndSaveCodeStream(message, codeGenTypeEnum, appId);
         // 上一步包含了工具调用的保存。
         // 7. 收集AI流式响应，并在完成后记录到对话历史
-        return streamHandlerExecutor.doExecutor(codeFlux, chatHistoryService, appId, loginUser, codeGenTypeEnum);
+        return streamHandlerExecutor.doExecutor(codeFlux, chatHistoryService, chatHistoryOriginalService, appId, loginUser, codeGenTypeEnum);
     }
 
     @Override
@@ -253,14 +259,14 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 先删除关联的对话历史
         try {
             boolean res = chatHistoryService.deleteByAppId(appId);
-            ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "删除对话历史失败");
+            res = chatHistoryOriginalService.deleteByAppId(appId);
         } catch (Exception e) {
             // 记录
             log.info("删除对话历史失败：{}", e.getMessage());
         }
 
         // 删除应用
-        return this.removeById(appId);
+        return super.removeById(appId);
     }
 
 
@@ -295,7 +301,8 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         // 应用名称暂时为 initPrompt 前 12 位
         app.setAppName(initPrompt.substring(0, Math.min(initPrompt.length(), 12)));
         // 使用 AI 智能选择代码生成类型
-        CodeGenTypeEnum selectedCodeGenType = aiCodeGenTypeRoutingService.routeCodeGenType(initPrompt);
+        AiCodeGenTypeRoutingService routingService = aiCodeGenTypeRoutingServiceFactory.createAiCodeGenTypeRoutingService();
+        CodeGenTypeEnum selectedCodeGenType = routingService.routeCodeGenType(initPrompt);
         app.setCodeGenType(selectedCodeGenType.getValue());
         // 插入数据库
         boolean result = this.save(app);
