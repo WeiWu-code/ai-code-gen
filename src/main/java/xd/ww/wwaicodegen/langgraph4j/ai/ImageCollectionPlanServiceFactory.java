@@ -5,6 +5,7 @@ import dev.langchain4j.service.AiServices;
 import jakarta.annotation.Resource;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import xd.ww.wwaicodegen.guardrail.PromptSafetyInputGuardrail;
 
 @Configuration
 public class ImageCollectionPlanServiceFactory {
@@ -16,6 +17,7 @@ public class ImageCollectionPlanServiceFactory {
     public ImageCollectionPlanService createImageCollectionPlanService() {
         return AiServices.builder(ImageCollectionPlanService.class)
                 .chatModel(chatModel)
+                .inputGuardrails(new PromptSafetyInputGuardrail())
                 .build();
     }
 }

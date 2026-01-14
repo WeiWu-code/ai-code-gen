@@ -5,6 +5,7 @@ import dev.langchain4j.service.AiServices;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import xd.ww.wwaicodegen.guardrail.PromptSafetyInputGuardrail;
 import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
 
 /**
@@ -33,6 +34,7 @@ public class AiCodeGenTypeRoutingServiceFactory {
 
         return AiServices.builder(AiCodeGenTypeRoutingService.class)
                 .chatModel(chatModel)
+                .inputGuardrails(new PromptSafetyInputGuardrail())
                 .build();
     }
 }

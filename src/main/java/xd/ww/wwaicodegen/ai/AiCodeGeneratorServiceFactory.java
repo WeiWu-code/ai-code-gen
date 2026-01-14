@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 import xd.ww.wwaicodegen.ai.tool.*;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
+import xd.ww.wwaicodegen.guardrail.PromptSafetyInputGuardrail;
 import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 import xd.ww.wwaicodegen.service.ChatHistoryOriginalService;
@@ -23,6 +24,7 @@ import java.time.Duration;
 
 /**
  * AI服务创建工厂
+ *
  * @author wei
  */
 @Configuration
@@ -57,12 +59,13 @@ public class AiCodeGeneratorServiceFactory {
             .maximumSize(1000)
             .expireAfterWrite(Duration.ofMinutes(30))
             .expireAfterAccess(Duration.ofMinutes(10))
-            .removalListener(((key, value, cause) -> log.debug("Ai 服务器实例 {} 被移除，原因： {}",key,cause)))
+            .removalListener(((key, value, cause) -> log.debug("Ai 服务器实例 {} 被移除，原因： {}", key, cause)))
             .build();
 
     /**
      * 根据AppId创建一个AiCodeGeneratorService
      * 如果缓存中有，则不创建
+     *
      * @param appId 应用Id
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(long appId) {
@@ -73,6 +76,7 @@ public class AiCodeGeneratorServiceFactory {
     /**
      * 根据AppId创建一个AiCodeGeneratorService
      * 如果缓存中有，则不创建
+     *
      * @param appId 应用Id
      */
     public AiCodeGeneratorService getAiCodeGeneratorService(long appId, CodeGenTypeEnum codeType) {
@@ -86,7 +90,8 @@ public class AiCodeGeneratorServiceFactory {
 
     /**
      * 根据AppId创建一个AiCodeGeneratorService
-     * @param appId 应用Id
+     *
+     * @param appId    应用Id
      * @param codeType 代码类型
      */
     private AiCodeGeneratorService createAiCodeGeneratorService(long appId, CodeGenTypeEnum codeType) {
@@ -106,16 +111,17 @@ public class AiCodeGeneratorServiceFactory {
                 // 先加载历史消息
                 int size = chatHistoryOriginalService.loadOriginalChatHistoryToMemory(appId, memory, 50);
                 yield AiServices.builder(AiCodeGeneratorService.class)
-                    .streamingChatModel(reasoningStreamingChatModel)
-                    .chatMemory(memory)
-                    .chatMemoryProvider(memoryId -> memory)
-                    .tools(toolManager.getAllTools())
-                    // 处理工具幻觉问题
-                    .hallucinatedToolNameStrategy(toolExecutionRequest ->
-                            ToolExecutionResultMessage.from(toolExecutionRequest,
-                                    "Error: there is no tool called " + toolExecutionRequest.name()))
-                    .maxSequentialToolsInvocations(15)
-                    .build();
+                        .streamingChatModel(reasoningStreamingChatModel)
+                        .chatMemory(memory)
+                        .chatMemoryProvider(memoryId -> memory)
+                        .tools(toolManager.getAllTools())
+                        // 处理工具幻觉问题
+                        .hallucinatedToolNameStrategy(toolExecutionRequest ->
+                                ToolExecutionResultMessage.from(toolExecutionRequest,
+                                        "Error: there is no tool called " + toolExecutionRequest.name()))
+                        .maxSequentialToolsInvocations(15)
+                        .inputGuardrails(new PromptSafetyInputGuardrail())
+                        .build();
             }
 
             case HTML, MULTI_FILE -> {
@@ -124,10 +130,11 @@ public class AiCodeGeneratorServiceFactory {
                 // 先加载历史消息
                 int size = chatHistoryService.loadChatHistoryToMemory(appId, memory, 20);
                 log.debug("加载 {} 条历史记录", size);
-                yield  AiServices.builder(AiCodeGeneratorService.class)
+                yield AiServices.builder(AiCodeGeneratorService.class)
                         .chatModel(chatModel)
                         .streamingChatModel(streamingChatModel)
                         .chatMemory(memory)
+                        .inputGuardrails(new PromptSafetyInputGuardrail())
                         .build();
             }
             default -> throw new BusinessException(ErrorCode.PARAMS_ERROR, "不支持的生成类型");

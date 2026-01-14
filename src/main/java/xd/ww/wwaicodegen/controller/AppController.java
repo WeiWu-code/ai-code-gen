@@ -10,7 +10,6 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
@@ -30,6 +29,8 @@ import xd.ww.wwaicodegen.model.entity.App;
 import xd.ww.wwaicodegen.model.entity.User;
 import xd.ww.wwaicodegen.model.request.app.*;
 import xd.ww.wwaicodegen.model.vo.AppVO;
+import xd.ww.wwaicodegen.ratelimit.annotation.RateLimit;
+import xd.ww.wwaicodegen.ratelimit.model.RateLimitType;
 import xd.ww.wwaicodegen.service.AppService;
 import xd.ww.wwaicodegen.service.ProjectDownloadService;
 import xd.ww.wwaicodegen.service.UserService;
@@ -296,6 +297,7 @@ public class AppController {
     }
 
     @GetMapping(value = "/chat/gen/code", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60,message = "AI对话请求过于频繁，请稍后再试")
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
                                                        @RequestParam String message,
                                                        HttpServletRequest request) {
