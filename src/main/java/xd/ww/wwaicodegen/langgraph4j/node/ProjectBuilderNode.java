@@ -1,20 +1,21 @@
 package xd.ww.wwaicodegen.langgraph4j.node;
 
+import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import xd.ww.wwaicodegen.core.builder.VueProjectBuilder;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
+import xd.ww.wwaicodegen.langgraph4j.model.BuildResult;
+import xd.ww.wwaicodegen.langgraph4j.model.NodeResponseMessage;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
 import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
-import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 
 import java.io.File;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
-import static xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder.sendEndSseEvent;
 
 @Slf4j
 public class ProjectBuilderNode {
@@ -22,7 +23,8 @@ public class ProjectBuilderNode {
         return node_async(state -> {
             WorkflowContext context = WorkflowContext.getContext(state);
             log.info("执行节点: 项目构建");
-            SseContextHolder.sendProcessing("项目构建");
+            NodeResponseMessage startMessage = new NodeResponseMessage("项目构建", "start");
+            SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
             // 获取必要的参数
             String buildCodeDir;
             String generatorCodeDir = context.getGeneratedCodeDir();
@@ -34,12 +36,23 @@ public class ProjectBuilderNode {
                 if (buildSuccess) {
                     buildCodeDir = generatorCodeDir + File.separator + "dist";
                     log.info("构建成功, 构建目录{}", buildCodeDir);
+                    BuildResult buildResult = BuildResult.builder()
+                            .isValid(true)
+                            .errors(outLog.toString())
+                            .build();
+                    context.setBuildResult(buildResult);
                 } else {
                     throw new BusinessException(ErrorCode.OPERATION_ERROR, "项目构建失败");
                 }
-                sendEndSseEvent(6, "项目构建");
+                NodeResponseMessage endMessage = new NodeResponseMessage("项目构建", "end");
+                SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
             } catch (Exception e) {
                 log.error("项目构建异常：{}", outLog);
+                BuildResult buildResult = BuildResult.builder()
+                        .isValid(false)
+                        .errors(outLog.toString())
+                        .build();
+                context.setBuildResult(buildResult);
                 // 异常时返回原路径
                 buildCodeDir = generatorCodeDir;
             }

@@ -2,17 +2,18 @@ package xd.ww.wwaicodegen.langgraph4j.node;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import xd.ww.wwaicodegen.langgraph4j.model.ImageResource;
+import xd.ww.wwaicodegen.langgraph4j.model.NodeResponseMessage;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
 
 import java.util.List;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
-import static xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder.sendEndSseEvent;
 
 @Slf4j
 public class PromptEnhancerNode {
@@ -21,7 +22,8 @@ public class PromptEnhancerNode {
             WorkflowContext context = WorkflowContext.getContext(state);
             log.info("执行节点: 提示词增强");
             try{
-                SseContextHolder.sendProcessing("提示词增强");
+                NodeResponseMessage startMessage = new NodeResponseMessage("代码生成", "start");
+                SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
                 // 获取原始prompt和收集的图片
                 String originPrompt = context.getOriginalPrompt();
                 String imageListStr = context.getImageListStr();
@@ -52,7 +54,8 @@ public class PromptEnhancerNode {
                 context.setCurrentStep("提示词增强");
                 context.setEnhancedPrompt(enhancerPromptStr);
                 log.info("提示词增强完成, 增强后长度 {} 字符", enhancerPromptStr.length());
-                sendEndSseEvent(2, "提示词增强");
+                NodeResponseMessage endMessage = new NodeResponseMessage("代码生成", "end");
+                SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
             }catch (Exception e){
                 log.error("提示词增强失败: {}", e.getMessage(), e);
             }

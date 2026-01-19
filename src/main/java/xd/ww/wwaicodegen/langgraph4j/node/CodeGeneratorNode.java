@@ -1,12 +1,14 @@
 package xd.ww.wwaicodegen.langgraph4j.node;
 
+import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.constant.AppConstant;
 import xd.ww.wwaicodegen.core.AiCodeGeneratorFacade;
-import xd.ww.wwaicodegen.langgraph4j.model.QualityResult;
+import xd.ww.wwaicodegen.langgraph4j.model.BuildResult;
+import xd.ww.wwaicodegen.langgraph4j.model.NodeResponseMessage;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
 import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
@@ -15,7 +17,6 @@ import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 import java.time.Duration;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
-import static xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder.sendEndSseEvent;
 
 @Slf4j
 public class CodeGeneratorNode {
@@ -25,7 +26,9 @@ public class CodeGeneratorNode {
 
             // 检查是否有错误信息
             context.setEnhancedPrompt(buildUserMessage(context));
-            SseContextHolder.sendProcessing("代码生成");
+            NodeResponseMessage startMessage = new NodeResponseMessage("代码生成", "start");
+            SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
+
             log.info("执行节点: 代码生成");
             // 使用增强后的提示词
             String userMessage = context.getEnhancedPrompt();
@@ -34,15 +37,18 @@ public class CodeGeneratorNode {
             AiCodeGeneratorFacade aiCodeGeneratorFacade = SpringContextUtil.getBean(AiCodeGeneratorFacade.class);
             log.info("开始生成代码，类型: {}", codeType.getText());
             // 先使用固定的AppId
-            Long appId = 3L;
+            Long appId = context.getAppId();
             Flux<String> codeStream = aiCodeGeneratorFacade.generatorAndSaveCodeStream(userMessage, codeType, appId);
+            // 同步发送给前端
+            codeStream = codeStream.doOnNext(SseContextHolder::emit);
             // 等待流输出完成
             codeStream.blockLast(Duration.ofMinutes(10));
             // 设置输出目录
             String generatedCodeDir = String.format("%s/%s_%s", AppConstant.CODE_OUTPUT_ROOT_DIR,
                     codeType.getValue(), appId);
 
-            sendEndSseEvent(4, "代码生成");
+            NodeResponseMessage endMessage = new NodeResponseMessage("代码生成", "end");
+            SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
             // 更新状态
             context.setCurrentStep("代码生成");
             context.setGeneratedCodeDir(generatedCodeDir);
@@ -53,15 +59,15 @@ public class CodeGeneratorNode {
 
 
     /**
-     * 构造用户消息，如果存在质检失败结果则添加错误修复信息
+     * 构造用户消息，如果存在构建失败则添加错误修复信息
      */
     private static String buildUserMessage(WorkflowContext context) {
         String userMessage = context.getEnhancedPrompt();
         // 检查是否存在质检失败结果
-        QualityResult qualityResult = context.getQualityResult();
-        if (isQualityCheckFailed(qualityResult)) {
+        BuildResult buildResult = context.getBuildResult();
+        if (isQualityCheckFailed(buildResult)) {
             // 直接将错误修复信息作为新的提示词（起到了修改的作用）
-            userMessage = buildErrorFixPrompt(qualityResult);
+            userMessage = buildErrorFixPrompt(buildResult);
         }
         return userMessage;
     }
@@ -69,7 +75,7 @@ public class CodeGeneratorNode {
     /**
      * 判断质检是否失败
      */
-    private static boolean isQualityCheckFailed(QualityResult qualityResult) {
+    private static boolean isQualityCheckFailed(BuildResult qualityResult) {
         return qualityResult != null &&
                 !qualityResult.getIsValid() &&
                 qualityResult.getErrors() != null &&
@@ -79,20 +85,11 @@ public class CodeGeneratorNode {
     /**
      * 构造错误修复提示词
      */
-    private static String buildErrorFixPrompt(QualityResult qualityResult) {
-        StringBuilder errorInfo = new StringBuilder();
-        errorInfo.append("\n\n## 上次生成的代码存在以下问题，请修复：\n");
-        // 添加错误列表
-        qualityResult.getErrors().forEach(error ->
-                errorInfo.append("- ").append(error).append("\n"));
-        // 添加修复建议（如果有）
-        if (qualityResult.getSuggestions() != null && !qualityResult.getSuggestions().isEmpty()) {
-            errorInfo.append("\n## 修复建议：\n");
-            qualityResult.getSuggestions().forEach(suggestion ->
-                    errorInfo.append("- ").append(suggestion).append("\n"));
-        }
-        errorInfo.append("\n请根据上述问题和建议重新生成代码，确保修复所有提到的问题。");
-        return errorInfo.toString();
+    private static String buildErrorFixPrompt(BuildResult qualityResult) {
+        return "\n\n## 上次生成的代码存在以下问题，请修复：\n" +
+                "\n 我将提供给你npm install 和 npm run build的日志： \n" +
+                qualityResult.getErrors() +
+                "\n请根据上述问题和建议重新生成代码，确保修复所有提到的问题。";
     }
 
 }

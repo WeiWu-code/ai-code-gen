@@ -1,11 +1,13 @@
 package xd.ww.wwaicodegen.langgraph4j.node;
 
+import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import xd.ww.wwaicodegen.langgraph4j.ai.ImageCollectionPlanService;
 import xd.ww.wwaicodegen.langgraph4j.model.ImageCollectionPlan;
 import xd.ww.wwaicodegen.langgraph4j.model.ImageResource;
+import xd.ww.wwaicodegen.langgraph4j.model.NodeResponseMessage;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.tools.ImageSearchTool;
 import xd.ww.wwaicodegen.langgraph4j.tools.LogoGeneratorTool;
@@ -19,7 +21,6 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
-import static xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder.sendEndSseEvent;
 
 @Slf4j
 public class ImageCollectorNode {
@@ -31,7 +32,8 @@ public class ImageCollectorNode {
             List<ImageResource> collectedImages = new ArrayList<>();
             try {
 
-                SseContextHolder.sendProcessing("图片收集");
+                NodeResponseMessage startMessage = new NodeResponseMessage("图片收集", "start");
+                SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
 
                 // 第一步：获取图片收集计划
                 ImageCollectionPlanService planService = SpringContextUtil.getBean(ImageCollectionPlanService.class);
@@ -85,7 +87,8 @@ public class ImageCollectorNode {
                     }
                 }
                 log.info("并发图片收集完成，共收集到 {} 张图片", collectedImages.size());
-                sendEndSseEvent(1, "图片收集");
+                NodeResponseMessage endMessage = new NodeResponseMessage("图片收集", "end");
+                SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
             } catch (Exception e) {
                 log.error("图片收集失败: {}", e.getMessage(), e);
             }

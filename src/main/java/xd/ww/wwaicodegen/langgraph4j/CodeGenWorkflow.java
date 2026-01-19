@@ -1,5 +1,6 @@
 package xd.ww.wwaicodegen.langgraph4j;
 
+import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.GraphRepresentation;
@@ -7,25 +8,25 @@ import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.NodeOutput;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import org.bsc.langgraph4j.prebuilt.MessagesStateGraph;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.publisher.Flux;
+import xd.ww.wwaicodegen.ai.model.AiResponseMessage;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
-import xd.ww.wwaicodegen.langgraph4j.model.QualityResult;
+import xd.ww.wwaicodegen.langgraph4j.model.BuildResult;
 import xd.ww.wwaicodegen.langgraph4j.node.*;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 
 import java.util.Map;
+import java.util.function.Consumer;
 
 import static org.bsc.langgraph4j.StateGraph.END;
 import static org.bsc.langgraph4j.StateGraph.START;
 import static org.bsc.langgraph4j.action.AsyncEdgeAction.edge_async;
-import static xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder.sendSseEvent;
 
 @Slf4j
 public class CodeGenWorkflow {
-
 
     /**
      * 创建完整的工作流
@@ -38,7 +39,6 @@ public class CodeGenWorkflow {
                     .addNode("prompt_enhancer", PromptEnhancerNode.create())
                     .addNode("router", RouterNode.create())
                     .addNode("code_generator", CodeGeneratorNode.create())
-                    .addNode("code_quality_check", CodeQualityCheckNode.create())
                     .addNode("project_builder", ProjectBuilderNode.create())
 
                     // 添加边
@@ -46,15 +46,19 @@ public class CodeGenWorkflow {
                     .addEdge("image_collector", "prompt_enhancer")
                     .addEdge("prompt_enhancer", "router")
                     .addEdge("router", "code_generator")
-                    .addEdge("code_generator", "code_quality_check")
-                    .addConditionalEdges("code_quality_check",
-                            edge_async(this::routeAfterQualityCheck),
+                    .addConditionalEdges("code_generator",
+                            edge_async(this::routeBuildOrSkip),
                             Map.of(
-                                    "build", "project_builder",   // 质检通过且需要构建
-                                    "skip_build", END,            // 质检通过但跳过构建
-                                    "fail", "code_generator"      // 质检失败，重新生成
+                                    "build", "project_builder",
+                                    "skip_build", END
+                            )
+                    )
+                    .addConditionalEdges("project_builder",
+                            edge_async(this::routeAfterBuilder),
+                            Map.of(
+                                    "success", END,            // 构建成功
+                                    "fail", "code_generator"      // 构建失败，重新生成
                             ))
-                    .addEdge("project_builder", END)
                     // 编译工作流
                     .compile();
         } catch (GraphStateException e) {
@@ -62,6 +66,17 @@ public class CodeGenWorkflow {
         }
     }
 
+    private String routeAfterBuilder(MessagesState<String> state) {
+        WorkflowContext context = WorkflowContext.getContext(state);
+        BuildResult buildResult = context.getBuildResult();
+        if (buildResult == null) {
+            return "success";
+        }
+        if(buildResult.getIsValid()){
+            return "success";
+        }
+        return "fail";
+    }
 
 
     /**
@@ -108,69 +123,61 @@ public class CodeGenWorkflow {
         return "build";
     }
 
-    private String routeAfterQualityCheck(MessagesState<String> state) {
-        WorkflowContext context = WorkflowContext.getContext(state);
-        QualityResult qualityResult = context.getQualityResult();
-        // 如果质检失败，重新生成代码
-        if (qualityResult == null || !qualityResult.getIsValid()) {
-            log.error("代码质检失败，需要重新生成代码");
-            return "fail";
-        }
-        // 质检通过，使用原有的构建路由逻辑
-        log.info("代码质检通过，继续后续流程");
-        return routeBuildOrSkip(state);
-    }
-
 
     /**
-     * 执行工作流（SSE 流式输出版本）
+     * 执行工作流（Flux 原生流式输出版本）
+     * 直接输出 String，节点内部可通过 context.emit() 发送
      */
-    public SseEmitter executeWorkflowWithSse(String originalPrompt) {
-        SseEmitter emitter = new SseEmitter(30 * 60 * 1000L);
-        Thread.startVirtualThread(() -> {
-            try {
-                SseContextHolder.set(emitter);
-                CompiledGraph<MessagesState<String>> workflow = createWorkflow();
-                WorkflowContext initialContext = WorkflowContext.builder()
-                        .originalPrompt(originalPrompt)
-                        .currentStep("初始化")
-                        .build();
-                sendSseEvent("workflow_start", Map.of(
-                        "message", "开始执行代码生成工作流",
-                        "originalPrompt", originalPrompt
-                ));
-                GraphRepresentation graph = workflow.getGraph(GraphRepresentation.Type.MERMAID);
-                log.info("工作流图 : \n{}", graph.content());
+    public Flux<String> executeWorkflowWithFlux(String originalPrompt, Long appId) {
+        return Flux.create(sink -> {
+            Thread.ofVirtual().start(() -> {
+                try {
+                    // 1. 定义发射器：直接把字符串推给 sink
+                    Consumer<String> emitter = sink::next;
 
-                int stepCounter = 1;
-                for (NodeOutput<MessagesState<String>> step : workflow.stream(
-                        Map.of(WorkflowContext.WORKFLOW_CONTEXT_KEY, initialContext))) {
+                    SseContextHolder.setEmitter(emitter);
+                    CompiledGraph<MessagesState<String>> workflow = createWorkflow();
 
-                    // 过滤END节点
-                    if(START.equals(step.node()) || END.equals(step.node())){
-                        continue;
+                    // 2. 初始化 Context，注入 emitter
+                    WorkflowContext initialContext = WorkflowContext.builder()
+                            .appId(appId)
+                            .originalPrompt(originalPrompt)
+                            .currentStep("初始化")
+                            .build();
+
+                    // 发送开始消息
+                    AiResponseMessage initMessage = new AiResponseMessage("工作流初始化\n");
+                    SseContextHolder.emit(JSONUtil.toJsonStr(initMessage));
+
+                    GraphRepresentation graph = workflow.getGraph(GraphRepresentation.Type.MERMAID);
+                    log.info("工作流图: \n{}", graph.content());
+
+                    // 3. 执行循环
+                    for (NodeOutput<MessagesState<String>> step : workflow.stream(
+                            Map.of(WorkflowContext.WORKFLOW_CONTEXT_KEY, initialContext))) {
+
+                        if (START.equals(step.node()) || END.equals(step.node())) {
+                            continue;
+                        }
+
+                        // 获取当前步骤的 State (Context)
+                        WorkflowContext currentContext = WorkflowContext.getContext(step.state());
+
                     }
-                    log.info("--- 第 {} 步完成  ---", stepCounter);
 
-                    stepCounter++;
+                    AiResponseMessage endMessage = new AiResponseMessage("工作流执行完成\n");
+                    SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+                    sink.complete(); // 结束流
+
+                } catch (Exception e) {
+                    log.error("工作流执行失败", e);
+                    sink.error(e);
+                } finally {
+                    // 清理ThreadLocal
+                    SseContextHolder.clear();
                 }
-                sendSseEvent("workflow_completed", Map.of(
-                        "message", "代码生成工作流执行完成！"
-                ));
-                log.info("代码生成工作流执行完成。");
-                emitter.complete();
-            } catch (Exception e) {
-                log.error("工作流执行失败: {}", e.getMessage(), e);
-                sendSseEvent("workflow_error", Map.of(
-                        "error", e.getMessage(),
-                        "message", "工作流执行失败"
-                ));
-                emitter.completeWithError(e);
-            }finally {
-                SseContextHolder.clear();
-            }
+            });
         });
-        return emitter;
     }
 
 }

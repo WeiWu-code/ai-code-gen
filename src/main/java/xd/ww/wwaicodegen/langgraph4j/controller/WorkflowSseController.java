@@ -3,7 +3,7 @@ package xd.ww.wwaicodegen.langgraph4j.controller;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import reactor.core.publisher.Flux;
 import xd.ww.wwaicodegen.langgraph4j.CodeGenWorkflow;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 
@@ -29,8 +29,8 @@ public class WorkflowSseController {
      * SSE 流式执行工作流
      */
     @GetMapping(value = "/execute-sse", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter executeWorkflowWithSse(@RequestParam String prompt) {
+    public Flux<String> executeWorkflowWithSse(@RequestParam String prompt, @RequestParam Long appId) {
         log.info("收到 Flux 工作流执行请求: {}", prompt);
-        return new CodeGenWorkflow().executeWorkflowWithSse(prompt);
+        return new CodeGenWorkflow().executeWorkflowWithFlux(prompt, appId);
     }
 }

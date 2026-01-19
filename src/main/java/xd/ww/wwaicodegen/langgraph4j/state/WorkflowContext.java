@@ -5,8 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
+import xd.ww.wwaicodegen.langgraph4j.model.BuildResult;
 import xd.ww.wwaicodegen.langgraph4j.model.ImageResource;
-import xd.ww.wwaicodegen.langgraph4j.model.QualityResult;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 import java.util.Map;
 import java.io.Serial;
@@ -21,6 +21,12 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class WorkflowContext implements Serializable {
+
+    /**
+     * 应用 ID
+     */
+    private Long appId = 0L;
+
 
     /**
      * WorkflowContext 在 MessagesState 中的存储key
@@ -67,16 +73,11 @@ public class WorkflowContext implements Serializable {
      */
     private String buildResultDir;
 
-    /**
-     * 错误信息
-     */
-    private String errorMessage;
 
     /**
      * 质量检查结果
      */
-    private QualityResult qualityResult;
-
+    private BuildResult buildResult;
 
     @Serial
     private static final long serialVersionUID = 1L;
