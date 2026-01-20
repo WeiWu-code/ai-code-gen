@@ -31,21 +31,25 @@ public class CodeGenWorkflow {
     /**
      * 创建完整的工作流
      */
-    public CompiledGraph<MessagesState<String>> createWorkflow() {
+    public CompiledGraph<MessagesState<String>> createWorkflow(boolean isFirst) {
         try {
             return new MessagesStateGraph<String>()
                     // 添加节点 - 使用完整实现的节点
                     .addNode("image_collector", ImageCollectorNode.create())
                     .addNode("prompt_enhancer", PromptEnhancerNode.create())
-                    .addNode("router", RouterNode.create())
                     .addNode("code_generator", CodeGeneratorNode.create())
                     .addNode("project_builder", ProjectBuilderNode.create())
 
                     // 添加边
-                    .addEdge(START, "image_collector")
+                    .addConditionalEdges(START, edge_async(s->
+                                isFirstGen(isFirst)
+                            ),
+                            Map.of(
+                                    "first", "image_collector",
+                                    "not_first", "code_generator"
+                            ))
                     .addEdge("image_collector", "prompt_enhancer")
-                    .addEdge("prompt_enhancer", "router")
-                    .addEdge("router", "code_generator")
+                    .addEdge("prompt_enhancer", "code_generator")
                     .addConditionalEdges("code_generator",
                             edge_async(this::routeBuildOrSkip),
                             Map.of(
@@ -78,39 +82,13 @@ public class CodeGenWorkflow {
         return "fail";
     }
 
-
     /**
-     * 执行工作流
+     * 判断是否是生成，或者修改
      */
-    public WorkflowContext executeWorkflow(String originalPrompt) {
-        CompiledGraph<MessagesState<String>> workflow = createWorkflow();
-
-        // 初始化 WorkflowContext
-        WorkflowContext initialContext = WorkflowContext.builder()
-                .originalPrompt(originalPrompt)
-                .currentStep("初始化")
-                .build();
-
-        GraphRepresentation graph = workflow.getGraph(GraphRepresentation.Type.MERMAID);
-        log.info("工作流图:\n{}", graph.content());
-        log.info("开始执行代码生成工作流");
-
-        WorkflowContext finalContext = null;
-        int stepCounter = 1;
-        for (NodeOutput<MessagesState<String>> step : workflow.stream(
-                Map.of(WorkflowContext.WORKFLOW_CONTEXT_KEY, initialContext))) {
-            log.info("--- 第 {} 步完成 ---", stepCounter);
-            // 显示当前状态
-            WorkflowContext currentContext = WorkflowContext.getContext(step.state());
-            if (currentContext != null) {
-                finalContext = currentContext;
-                log.info("当前步骤上下文: {}", currentContext);
-            }
-            stepCounter++;
-        }
-        log.info("代码生成工作流执行完成！");
-        return finalContext;
+    private String isFirstGen(boolean isFirst) {
+        return isFirst ? "first" : "not_first";
     }
+
 
     private String routeBuildOrSkip(MessagesState<String> state) {
         WorkflowContext context = WorkflowContext.getContext(state);
@@ -128,7 +106,7 @@ public class CodeGenWorkflow {
      * 执行工作流（Flux 原生流式输出版本）
      * 直接输出 String，节点内部可通过 context.emit() 发送
      */
-    public Flux<String> executeWorkflowWithFlux(String originalPrompt, Long appId) {
+    public Flux<String> executeWorkflowWithFlux(String originalPrompt, Long appId, CodeGenTypeEnum codeType, boolean isFirst) {
         return Flux.create(sink -> {
             Thread.ofVirtual().start(() -> {
                 try {
@@ -136,18 +114,27 @@ public class CodeGenWorkflow {
                     Consumer<String> emitter = sink::next;
 
                     SseContextHolder.setEmitter(emitter);
-                    CompiledGraph<MessagesState<String>> workflow = createWorkflow();
+                    CompiledGraph<MessagesState<String>> workflow = createWorkflow(isFirst);
 
                     // 2. 初始化 Context，注入 emitter
                     WorkflowContext initialContext = WorkflowContext.builder()
                             .appId(appId)
                             .originalPrompt(originalPrompt)
                             .currentStep("初始化")
+                            .generationType(codeType)
                             .build();
 
+                    // 如果不是第一次，设置增强后的提示词
+                    if(!isFirst) {
+                        initialContext.setEnhancedPrompt(originalPrompt);
+                    }
                     // 发送开始消息
-                    AiResponseMessage initMessage = new AiResponseMessage("工作流初始化\n");
-                    SseContextHolder.emit(JSONUtil.toJsonStr(initMessage));
+                    if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                        AiResponseMessage initMessage = new AiResponseMessage("\n\n工作流初始化\n\n");
+                        SseContextHolder.emit(JSONUtil.toJsonStr(initMessage));
+                    }else{
+                        SseContextHolder.emit("\n\n工作流初始化\n\n");
+                    }
 
                     GraphRepresentation graph = workflow.getGraph(GraphRepresentation.Type.MERMAID);
                     log.info("工作流图: \n{}", graph.content());
@@ -165,8 +152,12 @@ public class CodeGenWorkflow {
 
                     }
 
-                    AiResponseMessage endMessage = new AiResponseMessage("工作流执行完成\n");
-                    SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+                    if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                        AiResponseMessage endMessage = new AiResponseMessage("\n\n工作流执行完成\n\n");
+                        SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+                    }else{
+                        SseContextHolder.emit("\n\n工作流执行完成\n\n");
+                    }
                     sink.complete(); // 结束流
 
                 } catch (Exception e) {

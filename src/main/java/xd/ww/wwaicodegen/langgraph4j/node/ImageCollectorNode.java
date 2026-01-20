@@ -15,6 +15,7 @@ import xd.ww.wwaicodegen.langgraph4j.tools.MermaidDiagramTool;
 import xd.ww.wwaicodegen.langgraph4j.tools.UndrawIllustrationTool;
 import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
 import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
+import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,8 +33,14 @@ public class ImageCollectorNode {
             List<ImageResource> collectedImages = new ArrayList<>();
             try {
 
-                NodeResponseMessage startMessage = new NodeResponseMessage("图片收集", "start");
-                SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
+                CodeGenTypeEnum codeType = context.getGenerationType();
+
+                if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                    NodeResponseMessage startMessage = new NodeResponseMessage("{图片收集}", "开始");
+                    SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
+                }else{
+                    SseContextHolder.emit("\n\n开始{图片收集}\n\n");
+                }
 
                 // 第一步：获取图片收集计划
                 ImageCollectionPlanService planService = SpringContextUtil.getBean(ImageCollectionPlanService.class);
@@ -87,8 +94,13 @@ public class ImageCollectorNode {
                     }
                 }
                 log.info("并发图片收集完成，共收集到 {} 张图片", collectedImages.size());
-                NodeResponseMessage endMessage = new NodeResponseMessage("图片收集", "end");
-                SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+                if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                    NodeResponseMessage endMessage = new NodeResponseMessage("{图片收集}，" + collectedImages.size() + "张", "完成");
+                    SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+                }else{
+                    SseContextHolder.emit("\n\n结束" + "{图片收集}，" + collectedImages.size() + "张\n\n");
+                }
+
             } catch (Exception e) {
                 log.error("图片收集失败: {}", e.getMessage(), e);
             }

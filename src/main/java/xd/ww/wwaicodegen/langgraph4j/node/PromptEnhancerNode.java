@@ -10,6 +10,7 @@ import xd.ww.wwaicodegen.langgraph4j.model.ImageResource;
 import xd.ww.wwaicodegen.langgraph4j.model.NodeResponseMessage;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
+import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 
 import java.util.List;
 
@@ -22,8 +23,15 @@ public class PromptEnhancerNode {
             WorkflowContext context = WorkflowContext.getContext(state);
             log.info("执行节点: 提示词增强");
             try{
-                NodeResponseMessage startMessage = new NodeResponseMessage("代码生成", "start");
-                SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
+
+                CodeGenTypeEnum codeType = context.getGenerationType();
+                if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                    NodeResponseMessage startMessage = new NodeResponseMessage("{提示词增强}", "开始");
+                    SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
+                }else{
+                    SseContextHolder.emit("\n\n开始{提示词增强}\n\n");
+                }
+
                 // 获取原始prompt和收集的图片
                 String originPrompt = context.getOriginalPrompt();
                 String imageListStr = context.getImageListStr();
@@ -54,8 +62,13 @@ public class PromptEnhancerNode {
                 context.setCurrentStep("提示词增强");
                 context.setEnhancedPrompt(enhancerPromptStr);
                 log.info("提示词增强完成, 增强后长度 {} 字符", enhancerPromptStr.length());
-                NodeResponseMessage endMessage = new NodeResponseMessage("代码生成", "end");
-                SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+
+                if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                    NodeResponseMessage endMessage = new NodeResponseMessage("{提示词增强}", "完成");
+                    SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+                }else{
+                    SseContextHolder.emit("\n\n完成{提示词增强}\n\n");
+                }
             }catch (Exception e){
                 log.error("提示词增强失败: {}", e.getMessage(), e);
             }

@@ -15,6 +15,7 @@ import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 
 import java.time.Duration;
+import java.util.function.Consumer;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
 
@@ -26,13 +27,18 @@ public class CodeGeneratorNode {
 
             // 检查是否有错误信息
             context.setEnhancedPrompt(buildUserMessage(context));
-            NodeResponseMessage startMessage = new NodeResponseMessage("代码生成", "start");
-            SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
+            CodeGenTypeEnum codeType = context.getGenerationType();
+
+            if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                NodeResponseMessage startMessage = new NodeResponseMessage("{代码生成}", "开始");
+                SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
+            }else{
+                SseContextHolder.emit("\n\n开始{代码生成}\n\n");
+            }
 
             log.info("执行节点: 代码生成");
             // 使用增强后的提示词
             String userMessage = context.getEnhancedPrompt();
-            CodeGenTypeEnum codeType = context.getGenerationType();
             // 获取AI门面服务
             AiCodeGeneratorFacade aiCodeGeneratorFacade = SpringContextUtil.getBean(AiCodeGeneratorFacade.class);
             log.info("开始生成代码，类型: {}", codeType.getText());
@@ -40,15 +46,30 @@ public class CodeGeneratorNode {
             Long appId = context.getAppId();
             Flux<String> codeStream = aiCodeGeneratorFacade.generatorAndSaveCodeStream(userMessage, codeType, appId);
             // 同步发送给前端
-            codeStream = codeStream.doOnNext(SseContextHolder::emit);
+            final Consumer<String> directEmitter = SseContextHolder.getCurrentEmitter();
+            codeStream = codeStream.doOnNext(chunk -> {
+                // （此时是 IO 线程），直接使用上面捕获的对象
+                if (directEmitter != null) {
+                    directEmitter.accept(chunk);
+                } else {
+                    // 理论上不会进这里
+                    log.warn("发送器丢失: {}", chunk);
+                }
+            });
+
             // 等待流输出完成
             codeStream.blockLast(Duration.ofMinutes(10));
             // 设置输出目录
             String generatedCodeDir = String.format("%s/%s_%s", AppConstant.CODE_OUTPUT_ROOT_DIR,
                     codeType.getValue(), appId);
 
-            NodeResponseMessage endMessage = new NodeResponseMessage("代码生成", "end");
-            SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+            if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                NodeResponseMessage endMessage = new NodeResponseMessage("{代码生成}", "结束");
+                SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+            }else{
+                SseContextHolder.emit("\n\n结束{代码生成}\n\n");
+            }
+
             // 更新状态
             context.setCurrentStep("代码生成");
             context.setGeneratedCodeDir(generatedCodeDir);

@@ -17,6 +17,11 @@ public class SseContextHolder {
         }
     }
 
+    //暴露底层的发送器对象
+    public static Consumer<String> getCurrentEmitter() {
+        return EMITTER.get();
+    }
+
     public static void clear() {
         EMITTER.remove();
     }

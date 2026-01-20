@@ -12,6 +12,7 @@ import xd.ww.wwaicodegen.langgraph4j.model.NodeResponseMessage;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
 import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
+import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 
 import java.io.File;
 
@@ -23,8 +24,15 @@ public class ProjectBuilderNode {
         return node_async(state -> {
             WorkflowContext context = WorkflowContext.getContext(state);
             log.info("执行节点: 项目构建");
-            NodeResponseMessage startMessage = new NodeResponseMessage("项目构建", "start");
-            SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
+
+            CodeGenTypeEnum codeType = context.getGenerationType();
+            if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                NodeResponseMessage startMessage = new NodeResponseMessage("{项目构建}", "开始");
+                SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
+            }else{
+                SseContextHolder.emit("\n\n开始{项目构建}\n\n");
+            }
+
             // 获取必要的参数
             String buildCodeDir;
             String generatorCodeDir = context.getGeneratedCodeDir();
@@ -44,8 +52,13 @@ public class ProjectBuilderNode {
                 } else {
                     throw new BusinessException(ErrorCode.OPERATION_ERROR, "项目构建失败");
                 }
-                NodeResponseMessage endMessage = new NodeResponseMessage("项目构建", "end");
-                SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+
+                if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                    NodeResponseMessage endMessage = new NodeResponseMessage("{项目构建}", "完成");
+                    SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+                }else{
+                    SseContextHolder.emit("\n\n完成{项目构建}\n\n");
+                }
             } catch (Exception e) {
                 log.error("项目构建异常：{}", outLog);
                 BuildResult buildResult = BuildResult.builder()
@@ -53,6 +66,12 @@ public class ProjectBuilderNode {
                         .errors(outLog.toString())
                         .build();
                 context.setBuildResult(buildResult);
+                if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                    NodeResponseMessage endMessage = new NodeResponseMessage("{项目构建}，" + outLog, "失败");
+                    SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+                }else{
+                    SseContextHolder.emit("\n\n失败{项目构建}，" + outLog + "\n\n");
+                }
                 // 异常时返回原路径
                 buildCodeDir = generatorCodeDir;
             }

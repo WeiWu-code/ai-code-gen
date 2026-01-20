@@ -177,7 +177,13 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
         if(!isGraph){
             codeFlux = aiCodeGeneratorFacade.generatorAndSaveCodeStream(message, codeGenTypeEnum, appId);
         }else{
-            codeFlux = new CodeGenWorkflow().executeWorkflowWithFlux(message, appId);
+            // 校验是不是第一次
+            QueryWrapper queryWrapper = QueryWrapper.create()
+                    .eq("appId", appId)
+                    .eq("messageType", ChatHistoryMessageTypeEnum.AI.getValue());
+            // 非第一次工作流有变化
+            boolean isFirst = chatHistoryService.getOne(queryWrapper) == null;
+            codeFlux = new CodeGenWorkflow().executeWorkflowWithFlux(message, appId, codeGenTypeEnum, isFirst);
         }
         // 上一步包含了工具调用的保存。
         // 7. 收集AI流式响应，并在完成后记录到对话历史
