@@ -1,11 +1,13 @@
 package xd.ww.wwaicodegen.langgraph4j.node;
 
+import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.action.AsyncNodeAction;
 import org.bsc.langgraph4j.prebuilt.MessagesState;
 import xd.ww.wwaicodegen.langgraph4j.ai.ImageCollectionPlanService;
 import xd.ww.wwaicodegen.langgraph4j.model.ImageCollectionPlan;
 import xd.ww.wwaicodegen.langgraph4j.model.ImageResource;
+import xd.ww.wwaicodegen.langgraph4j.model.NodeResponseMessage;
 import xd.ww.wwaicodegen.langgraph4j.state.WorkflowContext;
 import xd.ww.wwaicodegen.langgraph4j.tools.ImageSearchTool;
 import xd.ww.wwaicodegen.langgraph4j.tools.LogoGeneratorTool;
@@ -13,13 +15,13 @@ import xd.ww.wwaicodegen.langgraph4j.tools.MermaidDiagramTool;
 import xd.ww.wwaicodegen.langgraph4j.tools.UndrawIllustrationTool;
 import xd.ww.wwaicodegen.langgraph4j.util.SpringContextUtil;
 import xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder;
+import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
 import static org.bsc.langgraph4j.action.AsyncNodeAction.node_async;
-import static xd.ww.wwaicodegen.langgraph4j.util.SseContextHolder.sendEndSseEvent;
 
 @Slf4j
 public class ImageCollectorNode {
@@ -31,7 +33,14 @@ public class ImageCollectorNode {
             List<ImageResource> collectedImages = new ArrayList<>();
             try {
 
-                SseContextHolder.sendProcessing("图片收集");
+                CodeGenTypeEnum codeType = context.getGenerationType();
+
+                if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                    NodeResponseMessage startMessage = new NodeResponseMessage("{图片收集}", "开始");
+                    SseContextHolder.emit(JSONUtil.toJsonStr(startMessage));
+                }else{
+                    SseContextHolder.emit("\n\n开始{图片收集}\n\n");
+                }
 
                 // 第一步：获取图片收集计划
                 ImageCollectionPlanService planService = SpringContextUtil.getBean(ImageCollectionPlanService.class);
@@ -85,7 +94,13 @@ public class ImageCollectorNode {
                     }
                 }
                 log.info("并发图片收集完成，共收集到 {} 张图片", collectedImages.size());
-                sendEndSseEvent(1, "图片收集");
+                if(codeType.equals(CodeGenTypeEnum.VUE_PROJECT)){
+                    NodeResponseMessage endMessage = new NodeResponseMessage("{图片收集}，" + collectedImages.size() + "张", "完成");
+                    SseContextHolder.emit(JSONUtil.toJsonStr(endMessage));
+                }else{
+                    SseContextHolder.emit("\n\n结束" + "{图片收集}，" + collectedImages.size() + "张\n\n");
+                }
+
             } catch (Exception e) {
                 log.error("图片收集失败: {}", e.getMessage(), e);
             }

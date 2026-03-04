@@ -21,6 +21,7 @@ import xd.ww.wwaicodegen.core.handler.StreamHandlerExecutor;
 import xd.ww.wwaicodegen.exception.BusinessException;
 import xd.ww.wwaicodegen.exception.ErrorCode;
 import xd.ww.wwaicodegen.exception.ThrowUtils;
+import xd.ww.wwaicodegen.langgraph4j.CodeGenWorkflow;
 import xd.ww.wwaicodegen.model.emums.ChatHistoryMessageTypeEnum;
 import xd.ww.wwaicodegen.model.emums.CodeGenTypeEnum;
 import xd.ww.wwaicodegen.model.entity.App;
@@ -146,7 +147,7 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
     }
 
     @Override
-    public Flux<String> chatToGenCode(Long appId, String message, User loginUser) {
+    public Flux<String> chatToGenCode(Long appId, String message, User loginUser, boolean isGraph) {
         // 1. 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "应用 ID 不能为空");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "用户消息不能为空");
@@ -172,7 +173,18 @@ public class AppServiceImpl extends ServiceImpl<AppMapper, App> implements AppSe
             ThrowUtils.throwIf(!saveResult, ErrorCode.OPERATION_ERROR, "添加消息进原始对话历史失败");
         }
         // 6. 调用 AI 生成代码，流式
-        Flux<String> codeFlux = aiCodeGeneratorFacade.generatorAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        Flux<String> codeFlux;
+        if(!isGraph){
+            codeFlux = aiCodeGeneratorFacade.generatorAndSaveCodeStream(message, codeGenTypeEnum, appId);
+        }else{
+            // 校验是不是第一次
+            QueryWrapper queryWrapper = QueryWrapper.create()
+                    .eq("appId", appId)
+                    .eq("messageType", ChatHistoryMessageTypeEnum.AI.getValue());
+            // 非第一次工作流有变化
+            boolean isFirst = chatHistoryService.getOne(queryWrapper) == null;
+            codeFlux = new CodeGenWorkflow().executeWorkflowWithFlux(message, appId, codeGenTypeEnum, isFirst);
+        }
         // 上一步包含了工具调用的保存。
         // 7. 收集AI流式响应，并在完成后记录到对话历史
         return streamHandlerExecutor.doExecutor(codeFlux, chatHistoryService, chatHistoryOriginalService, appId, loginUser, codeGenTypeEnum);

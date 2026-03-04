@@ -1,74 +1,28 @@
 package xd.ww.wwaicodegen.langgraph4j.util;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import java.util.function.Consumer;
 
-import java.io.IOException;
-import java.util.Map;
-
-@Slf4j
 public class SseContextHolder {
-    private static final ThreadLocal<SseEmitter> EMITTER_HOLDER = new ThreadLocal<>();
+    // 专门用来存放 String 发送器
+    private static final ThreadLocal<Consumer<String>> EMITTER = new ThreadLocal<>();
 
-    public static void set(SseEmitter emitter) {
-        EMITTER_HOLDER.set(emitter);
+    public static void setEmitter(Consumer<String> emitter) {
+        EMITTER.set(emitter);
     }
 
-    public static SseEmitter get() {
-        return EMITTER_HOLDER.get();
+    public static void emit(String content) {
+        Consumer<String> emitter = EMITTER.get();
+        if (emitter != null) {
+            emitter.accept(content);
+        }
+    }
+
+    //暴露底层的发送器对象
+    public static Consumer<String> getCurrentEmitter() {
+        return EMITTER.get();
     }
 
     public static void clear() {
-        EMITTER_HOLDER.remove();
-    }
-    
-    // 快捷发送 "正在执行" 事件的方法
-    public static void sendProcessing(String stepName) {
-        SseEmitter emitter = get();
-        if (emitter != null) {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name("step_processing")
-                        .data(Map.of("stepName", stepName)));
-            } catch (Exception e) {
-                // 忽略发送失败，避免影响主流程
-            }
-        }
-    }
-
-    /**
-     * 发送 SSE 事件的辅助方法
-     */
-    public static void sendEndSseEvent(int stepCounter, String currentStep) {
-        SseEmitter emitter = get();
-        if (emitter != null) {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name("step_completed")
-                        .data(Map.of(
-                                "stepNumber", stepCounter,
-                                "currentStep", currentStep)));
-            } catch (IOException e) {
-                log.error("发送 SSE 事件失败: {}", e.getMessage(), e);
-            }
-        }
-
-    }
-
-    /**
-     * 发送 SSE 事件的辅助方法
-     */
-    public static void sendSseEvent(String status, Object data) {
-        SseEmitter emitter = get();
-        if (emitter != null) {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name(status)
-                        .data(data));
-            } catch (IOException e) {
-                log.error("发送 SSE 事件失败: {}", e.getMessage(), e);
-            }
-        }
-
+        EMITTER.remove();
     }
 }

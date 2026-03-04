@@ -300,13 +300,14 @@ public class AppController {
     @RateLimit(limitType = RateLimitType.USER, rate = 5, rateInterval = 60,message = "AI对话请求过于频繁，请稍后再试")
     public Flux<ServerSentEvent<String>> chatToGenCode(@RequestParam Long appId,
                                                        @RequestParam String message,
+                                                       @RequestParam(defaultValue = "true") boolean isGraph,
                                                        HttpServletRequest request) {
         // 参数校验
         ThrowUtils.throwIf(appId == null || appId <= 0, ErrorCode.PARAMS_ERROR, "appId不合法");
         ThrowUtils.throwIf(StrUtil.isBlank(message), ErrorCode.PARAMS_ERROR, "message不能为空");
         // 获取当前登录用户
         User loginUser = userService.getLoginUser(request);
-        Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser);
+        Flux<String> contentFlux = appService.chatToGenCode(appId, message, loginUser, isGraph);
         return contentFlux
                 .map(chunk -> {
                     Map<String, String> wrapper = Map.of("d", chunk);

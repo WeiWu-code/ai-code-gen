@@ -7,29 +7,24 @@ import lombok.NoArgsConstructor;
 
 import java.io.Serial;
 import java.io.Serializable;
-import java.util.List;
 
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class QualityResult implements Serializable {
+public class BuildResult implements Serializable {
     
     @Serial
     private static final long serialVersionUID = 1L;
     
     /**
-     * 是否通过质检
+     * 是否构建成功
      */
     private Boolean isValid;
     
     /**
      * 错误列表
      */
-    private List<String> errors;
-    
-    /**
-     * 改进建议
-     */
-    private List<String> suggestions;
+    private String errors;
+
 }

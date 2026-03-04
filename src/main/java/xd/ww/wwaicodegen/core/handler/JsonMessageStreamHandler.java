@@ -13,6 +13,7 @@ import xd.ww.wwaicodegen.constant.AppConstant;
 import xd.ww.wwaicodegen.core.builder.VueProjectBuilder;
 import xd.ww.wwaicodegen.exception.ErrorCode;
 import xd.ww.wwaicodegen.exception.ThrowUtils;
+import xd.ww.wwaicodegen.langgraph4j.model.NodeResponseMessage;
 import xd.ww.wwaicodegen.model.emums.ChatHistoryMessageTypeEnum;
 import xd.ww.wwaicodegen.model.entity.ChatHistoryOriginal;
 import xd.ww.wwaicodegen.model.entity.User;
@@ -39,9 +40,6 @@ public class JsonMessageStreamHandler {
 
     @Resource
     private ToolManager toolManager;
-
-    @Resource
-    private ChatHistoryOriginalService chatHistoryOriginalService;
 
     /**
      * 处理 TokenStream（VUE_PROJECT）
@@ -156,7 +154,16 @@ public class JsonMessageStreamHandler {
                 chatHistoryStringBuilder.append(output);
                 return output;
             }
-
+            case NODE_RESPONSE -> {
+                // 持久化，传给前端
+                NodeResponseMessage message = JSONUtil.toBean(chunk, NodeResponseMessage.class);
+                String data = String.format("\n\n%s %s\n\n", message.getState(), message.getName());
+                // 直接拼接响应
+                chatHistoryStringBuilder.append(data);
+                // 与展示数据逻辑相同
+                aiOriginResponseStringBuilder.append(data);
+                return data;
+            }
             default -> {
                 log.error("不支持的消息类型: {}", typeEnum);
                 return "";
